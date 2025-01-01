@@ -16,34 +16,10 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { menubar } from 'menubar';
 
-import Store from 'electron-store';
-
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
-
-
-interface Settings {
-  interval: number;
-  resolution: string;
-  framerate: number;
-}
-
-const store = new Store<Settings>({
-  schema: {
-    interval: {
-      type: 'number',
-      default: 5,
-    },
-    resolution: {
-      type: 'string',
-      default: '1920x1080',
-    },
-    framerate: {
-      type: 'number',
-      default: 30,
-    },
-  },
-});
+import store from './store';
+import type { Settings } from './store';
 
 class AppUpdater {
   constructor() {
@@ -61,7 +37,7 @@ ipcMain.on('ipc-example', async (event, arg) => {
   event.reply('ipc-example', msgTemplate('pong'));
 });
 
-ipcMain.handle('settings:save', async (_, settings) => {
+ipcMain.handle('settings:save', async (_, settings: Settings) => {
   store.set('interval', settings.interval);
   store.set('resolution', settings.resolution);
   store.set('framerate', settings.framerate);
@@ -73,7 +49,7 @@ ipcMain.handle('settings:get', async () => {
     interval: store.get('interval'),
     resolution: store.get('resolution'),
     framerate: store.get('framerate'),
-  };
+  } as Settings;
 });
 
 if (process.env.NODE_ENV === 'production') {

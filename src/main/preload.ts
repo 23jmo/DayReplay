@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-console.log('preload.ts is running');
+console.log('🚀 Preload script is running');
 
 interface Settings {
   interval: number;
@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     console.log('saveSettings', settings);
     ipcRenderer.invoke('settings:save', settings);
   },
+  startRecording: () => ipcRenderer.invoke('recording:start'),
+  pauseRecording: () => ipcRenderer.invoke('recording:pause'),
+  exportRecording: () => ipcRenderer.invoke('recording:export'),
 });
 
 export {};

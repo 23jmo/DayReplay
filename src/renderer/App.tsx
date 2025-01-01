@@ -7,8 +7,6 @@ function Settings() {
   const [resolution, setResolution] = useState('1920x1080');
   const [framerate, setFramerate] = useState(30);
 
-
-
   // Load settings when component mounts
   useEffect(() => {
     const loadSettings = async () => {

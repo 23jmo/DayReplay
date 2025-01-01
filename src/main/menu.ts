@@ -13,7 +13,10 @@ import type { Menubar } from 'menubar';
 
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
-import { resolveHtmlPath } from './util';
+import { resolveHtmlPath, startRecording, pauseRecording, exportRecording } from './util';
+
+import store from './store';
+
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -63,14 +66,25 @@ export default class MenuBuilder {
         label: 'Start Recording',
         accelerator: 'CommandOrControl+Shift+R',
         click: () => {
-          // TODO: Implement recording logic
+          const settings = {
+            interval: store.get('interval'),
+            resolution: store.get('resolution'),
+            framerate: store.get('framerate'),
+          }
+          console.log('Settings:', settings);
+
+          startRecording(
+            settings.interval,
+            settings.resolution,
+            settings.framerate
+          );
         },
       },
       { // TODO: make it only show when recording is active
         label: 'Stop Recording',
         accelerator: 'CommandOrControl+Shift+S',
-        click: () => {
-        // TODO: Implement stop recording logic
+        click: async () => {
+          await exportRecording();
         },
       },
       {type: 'separator'},
