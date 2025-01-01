@@ -1,49 +1,107 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import icon from '../../assets/icon.svg';
+import { useState, useEffect } from 'react';
 import './App.css';
 
-function Hello() {
+function Settings() {
+  const [interval, setInterval] = useState(5);
+  const [resolution, setResolution] = useState('1920x1080');
+  const [framerate, setFramerate] = useState(30);
+
+
+
+  // Load settings when component mounts
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!window.electronAPI) {
+        console.error('Electron API not available');
+        return;
+      }
+      const settings = await window.electronAPI.getSettings();
+      setInterval(settings.interval);
+      setResolution(settings.resolution);
+      setFramerate(settings.framerate);
+    };
+    loadSettings();
+  }, []);
+
+  const resolutionOptions = ['1920x1080', '1280x720', '3840x2160'];
+  const frameRateOptions = ['24', '30', '60'];
+  const intervalOptions = ['1', '3', '5', '10', '15', '30'];
+
+  const handleSave = async () => {
+    await window.electronAPI.saveSettings({
+      interval,
+      resolution,
+      framerate,
+    });
+  };
+
   return (
-    <div>
-      <div className="Hello">
-        <img width="200" alt="icon" src={icon} />
+    <div className="settings-container">
+      <h2>Settings</h2>
+
+      <div className="setting-group">
+        <label htmlFor="interval">
+          Time between shots (seconds):
+          <select
+            id="interval"
+            value={interval}
+            onChange={(e) => setInterval(Number(e.target.value))}
+          >
+            {intervalOptions.map((intvl) => (
+              <option key={intvl} value={intvl}>
+                {intvl}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-      <h1>electron-react-boilerplate</h1>
-      <div className="Hello">
-        <a
-          href="https://electron-react-boilerplate.js.org/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <button type="button">
-            <span role="img" aria-label="books">
-              📚
-            </span>
-            Read our docs
-          </button>
-        </a>
-        <a
-          href="https://github.com/sponsors/electron-react-boilerplate"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <button type="button">
-            <span role="img" aria-label="folded hands">
-              🙏
-            </span>
-            Donate
-          </button>
-        </a>
+
+      <div className="setting-group">
+        <label htmlFor="resolution">
+          Resolution:
+          <select
+            id="resolution"
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value)}
+          >
+            {resolutionOptions.map((res) => (
+              <option key={res} value={res}>
+                {res}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
+
+      <div className="setting-group">
+        <label htmlFor="framerate">
+          Output Framerate:
+          <select
+            id="framerate"
+            value={framerate}
+            onChange={(e) => setFramerate(Number(e.target.value))}
+          >
+            {frameRateOptions.map((fps) => (
+              <option key={fps} value={fps}>
+                {fps}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <button type="button" onClick={handleSave}>
+        Save Settings
+      </button>
     </div>
   );
 }
-
 export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Hello />} />
+        <Route path="/" element={<Settings />} />
       </Routes>
     </Router>
   );

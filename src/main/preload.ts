@@ -1,29 +1,30 @@
-// Disable no-unused-vars, broken for spread args
-/* eslint no-unused-vars: off */
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
-export type Channels = 'ipc-example';
+console.log('preload.ts is running');
 
-const electronHandler = {
-  ipcRenderer: {
-    sendMessage(channel: Channels, ...args: unknown[]) {
-      ipcRenderer.send(channel, ...args);
-    },
-    on(channel: Channels, func: (...args: unknown[]) => void) {
-      const subscription = (_event: IpcRendererEvent, ...args: unknown[]) =>
-        func(...args);
-      ipcRenderer.on(channel, subscription);
+interface Settings {
+  interval: number;
+  resolution: string;
+  framerate: number;
+}
 
-      return () => {
-        ipcRenderer.removeListener(channel, subscription);
-      };
-    },
-    once(channel: Channels, func: (...args: unknown[]) => void) {
-      ipcRenderer.once(channel, (_event, ...args) => func(...args));
-    },
+interface ElectronAPI {
+  getSettings: () => Promise<Settings>;
+  saveSettings: (settings: Settings) => Promise<boolean>;
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  saveSettings: (settings: any) => {
+    console.log('saveSettings', settings);
+    ipcRenderer.invoke('settings:save', settings);
   },
-};
+});
 
-contextBridge.exposeInMainWorld('electron', electronHandler);
-
-export type ElectronHandler = typeof electronHandler;
+export {};

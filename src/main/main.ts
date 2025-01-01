@@ -10,14 +10,40 @@
  */
 
 import path from 'path';
-import { app, BrowserWindow, Menu, shell, ipcMain, Tray } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, Tray } from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { menubar } from 'menubar';
 
+import Store from 'electron-store';
+
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+
+
+interface Settings {
+  interval: number;
+  resolution: string;
+  framerate: number;
+}
+
+const store = new Store<Settings>({
+  schema: {
+    interval: {
+      type: 'number',
+      default: 5,
+    },
+    resolution: {
+      type: 'string',
+      default: '1920x1080',
+    },
+    framerate: {
+      type: 'number',
+      default: 30,
+    },
+  },
+});
 
 class AppUpdater {
   constructor() {
@@ -27,12 +53,27 @@ class AppUpdater {
   }
 }
 
-let mainWindow: BrowserWindow | null = null;
+// const mainWindow: BrowserWindow | null = null;
 
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
   event.reply('ipc-example', msgTemplate('pong'));
+});
+
+ipcMain.handle('settings:save', async (_, settings) => {
+  store.set('interval', settings.interval);
+  store.set('resolution', settings.resolution);
+  store.set('framerate', settings.framerate);
+  return true;
+});
+
+ipcMain.handle('settings:get', async () => {
+  return {
+    interval: store.get('interval'),
+    resolution: store.get('resolution'),
+    framerate: store.get('framerate'),
+  };
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -78,58 +119,58 @@ const installExtensions = async () => {
 //   }
 // };
 
-const createSettingsWindow = async () => {
-  if (isDebug) {
-    await installExtensions();
-  }
+// const createSettingsWindow = async () => {
+//   if (isDebug) {
+//     await installExtensions();
+//   }
 
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets');
+//   const RESOURCES_PATH = app.isPackaged
+//     ? path.join(process.resourcesPath, 'assets')
+//     : path.join(__dirname, '../../assets');
 
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
+//   const getAssetPath = (...paths: string[]): string => {
+//     return path.join(RESOURCES_PATH, ...paths);
+//   };
 
-  mainWindow = new BrowserWindow({
-    show: false,
-    width: 1024,
-    height: 728,
-    icon: getAssetPath('icon.png'),
-    webPreferences: {
-      preload: app.isPackaged
-        ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, '../../.erb/dll/preload.js'),
-    },
-  });
+//   mainWindow = new BrowserWindow({
+//     show: false,
+//     width: 1024,
+//     height: 728,
+//     icon: getAssetPath('icon.png'),
+//     webPreferences: {
+//       preload: app.isPackaged
+//         ? path.join(__dirname, 'preload.js')
+//         : path.join(__dirname, '../../.erb/dll/preload.js'),
+//     },
+//   });
 
-  mainWindow.loadURL(resolveHtmlPath('index.html'));
+//   mainWindow.loadURL(resolveHtmlPath('index.html'));
 
-  mainWindow.on('ready-to-show', () => {
-    if (!mainWindow) {
-      throw new Error('"mainWindow" is not defined');
-    }
-    if (process.env.START_MINIMIZED) {
-      mainWindow.minimize();
-    } else {
-      mainWindow.show();
-    }
-  });
+//   mainWindow.on('ready-to-show', () => {
+//     if (!mainWindow) {
+//       throw new Error('"mainWindow" is not defined');
+//     }
+//     if (process.env.START_MINIMIZED) {
+//       mainWindow.minimize();
+//     } else {
+//       mainWindow.show();
+//     }
+//   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+//   mainWindow.on('closed', () => {
+//     mainWindow = null;
+//   });
 
-  // Open urls in the user's browser
-  mainWindow.webContents.setWindowOpenHandler((edata) => {
-    shell.openExternal(edata.url);
-    return { action: 'deny' };
-  });
+//   // Open urls in the user's browser
+//   mainWindow.webContents.setWindowOpenHandler((edata) => {
+//     shell.openExternal(edata.url);
+//     return { action: 'deny' };
+//   });
 
-  // Remove this if your app does not use auto updates
-  // eslint-disable-next-line
-  new AppUpdater();
-};
+//   // Remove this if your app does not use auto updates
+//   // eslint-disable-next-line
+//   new AppUpdater();
+// };
 /**
  * Add event listeners...
  */

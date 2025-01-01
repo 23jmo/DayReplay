@@ -12,6 +12,8 @@ import {
 import type { Menubar } from 'menubar';
 
 import { autoUpdater } from 'electron-updater';
+import path from 'node:path';
+import { resolveHtmlPath } from './util';
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -25,6 +27,8 @@ export default class MenuBuilder {
   private updateAvailableMenuItem: MenuItem;
 
   private updateReadyForInstallMenuItem: MenuItem;
+
+  private settingsWindow: BrowserWindow | null = null;
 
   constructor() {
 
@@ -54,36 +58,86 @@ export default class MenuBuilder {
 
   buildMenu(): Menu {
     const contextMenu = Menu.buildFromTemplate([
-      this.checkForUpdatesMenuItem,
-      this.updateAvailableMenuItem,
-      this.updateReadyForInstallMenuItem,
-    { type: 'separator' },
+      {type: 'separator'},
       {
-        label: 'Developer',
-        submenu: [
-          {
-            role: 'reload',
-            accelerator: 'CommandOrControl+R',
-          },
-          {
-            role: 'toggleDevTools',
-            accelerator:
-              process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
-          },
-          {
-            label: 'View Application Logs',
-          },
-        ],
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit DayReplay',
-        accelerator: 'CommandOrControl+Q',
+        label: 'Start Recording',
+        accelerator: 'CommandOrControl+Shift+R',
         click: () => {
-          app.quit();
+          // TODO: Implement recording logic
         },
       },
-    ]);
+      { // TODO: make it only show when recording is active
+        label: 'Stop Recording',
+        accelerator: 'CommandOrControl+Shift+S',
+        click: () => {
+        // TODO: Implement stop recording logic
+        },
+      },
+      {type: 'separator'},
+      {
+        label: 'Settings',
+        accelerator: 'CommandOrControl+Shift+.',
+        click: () => {
+          if (this.settingsWindow) {
+            this.settingsWindow.focus();
+            return;
+          }
+
+          this.settingsWindow = new BrowserWindow({
+            width: 1024,
+            height: 728,
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              preload: path.join(__dirname, '../../.erb/dll/preload.js'),
+            },
+          });
+
+          console.log('Preload path:', path.join(__dirname, '../../.erb/dll/preload.js'));
+          this.settingsWindow.webContents.openDevTools();
+
+          // Add error handler
+          this.settingsWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+            console.error('Failed to load:', errorDescription);
+          });
+
+          this.settingsWindow.loadURL(resolveHtmlPath('index.html'));
+
+          this.settingsWindow.on('closed', () => {
+            this.settingsWindow = null;
+          });
+        },
+      },
+      { type: 'separator' },
+        {
+          label: 'Developer',
+          submenu: [
+            {
+              role: 'reload',
+              accelerator: 'CommandOrControl+R',
+            },
+            {
+              role: 'toggleDevTools',
+              accelerator:
+                process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+            },
+            {
+              label: 'View Application Logs',
+            },
+          ],
+        },
+        { type: 'separator' },
+        this.checkForUpdatesMenuItem,
+        this.updateAvailableMenuItem,
+        this.updateReadyForInstallMenuItem,
+        {
+          label: 'Quit DayReplay',
+          accelerator: 'CommandOrControl+Q',
+          click: () => {
+            app.quit();
+          },
+        },
+      ]);
     return contextMenu;
   }
 
