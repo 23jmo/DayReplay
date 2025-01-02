@@ -1,6 +1,34 @@
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './App.css';
+
+declare global {
+  interface Window {
+    electron: {
+      store: {
+        get: (key: string) => any;
+        set: (key: string, val: any) => void;
+      };
+      ipcRenderer: {
+        close: () => void;
+        minimize: () => void;
+        maximize: () => void;
+      };
+    };
+  }
+}
+
+function ProfileButton() {
+  return <button className="profile-button">Profile</button>;
+}
+
+function TitleBar() {
+  return (
+    <div className="titlebar">
+      <ProfileButton />
+    </div>
+  );
+}
 
 function Settings() {
   const [interval, setInterval] = useState(5);
@@ -95,12 +123,20 @@ function Settings() {
     </div>
   );
 }
+
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Settings />} />
-      </Routes>
-    </Router>
+    <>
+      <TitleBar />
+      <Router>
+        <div>
+          <div className="content">
+            <Routes>
+              <Route path="/" element={<Settings />} />
+            </Routes>
+          </div>
+        </div>
+      </Router>
+    </>
   );
 }

@@ -114,6 +114,7 @@
     "screenshot-desktop": "^1.15.1"
   },
   "devDependencies": {
+    "@electron-forge/maker-dmg": "^7.6.0",
     "@electron/rebuild": "^3.3.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",

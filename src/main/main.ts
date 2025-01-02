@@ -164,7 +164,7 @@ app
   .then(async () => {
     console.log('app ready');
     const tray = new Tray(path.join(__dirname, '../../assets/icon.png'));
-    const menuBuilder = new MenuBuilder();
+    const menuBuilder = new MenuBuilder(tray);
     const contextMenu = menuBuilder.buildMenu();
     tray.setContextMenu(contextMenu);
 
@@ -195,3 +195,24 @@ app
   .catch((error) => {
     console.error('Error in app.whenReady:', error);
   });
+
+ipcMain.on('window-controls', (_, command) => {
+  const window = BrowserWindow.getFocusedWindow();
+  if (!window) return;
+
+  switch (command) {
+    case 'minimize':
+      window.minimize();
+      break;
+    case 'maximize':
+      if (window.isMaximized()) {
+        window.unmaximize();
+      } else {
+        window.maximize();
+      }
+      break;
+    case 'close':
+      window.close();
+      break;
+  }
+});

@@ -1,0 +1,21 @@
+
+Phase 1:
+  ☐ publish the app - set up build as dmg
+  ☐ set up auto-updater
+Phase 2:
+  ☐ create a library of previous timelapses
+  ☐ set up mongo or maybe firebase to store these timelapses
+  ☐ react routing and a sidebar with settings, library, and statistics?
+  ☐ ability to review previous timelapses
+  ☐ ability to delete timelapses, export timelapses
+AI Features:
+  ☐ detect activity changes and mark key frames
+  ☐ review key frames (llm) and get back the activity category and productivity score
+  ☐ Generate a summary of the timelapse as well as a timeline of the day that I can render
+  ☐ save these stats to the database
+
+
+
+
+Phase 3 corporate management:
+  ☐

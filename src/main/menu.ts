@@ -7,21 +7,26 @@ import {
   BrowserWindow,
   MenuItemConstructorOptions,
   MenuItem,
+  Tray,
 } from 'electron';
 
 import type { Menubar } from 'menubar';
 
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
-import { resolveHtmlPath, startRecording, pauseRecording, exportRecording } from './util';
+import { resolveHtmlPath, startRecording, pauseRecording, exportRecording, resumeRecording } from './util';
 
 import store from './store';
+import { TrayIcons, MenuIcons } from './assets';
 
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
   submenu?: DarwinMenuItemConstructorOptions[] | Menu;
 }
+
+let isRecording = false;
+let isPaused = false;
 
 export default class MenuBuilder {
 
@@ -33,7 +38,11 @@ export default class MenuBuilder {
 
   private settingsWindow: BrowserWindow | null = null;
 
-  constructor() {
+  private tray: Tray;
+
+  constructor(tray: Tray) {
+
+    this.tray = tray;
 
     this.checkForUpdatesMenuItem = new MenuItem({
       label: 'Check for updates',
@@ -60,32 +69,51 @@ export default class MenuBuilder {
 
 
   buildMenu(): Menu {
-    const contextMenu = Menu.buildFromTemplate([
-      {type: 'separator'},
-      {
-        label: 'Start Recording',
-        accelerator: 'CommandOrControl+Shift+R',
-        click: () => {
-          const settings = {
-            interval: store.get('interval'),
-            resolution: store.get('resolution'),
-            framerate: store.get('framerate'),
-          }
-          console.log('Settings:', settings);
+    const settings = {
+      interval: store.get('interval'),
+      resolution: store.get('resolution'),
+      framerate: store.get('framerate'),
+    };
 
-          startRecording(
-            settings.interval,
-            settings.resolution,
-            settings.framerate
-          );
+    const menu = Menu.buildFromTemplate([
+      {
+        label: isRecording
+          ? (isPaused ? 'Resume Recording' : 'Stop Recording')
+          : 'Start Recording',
+        // icon: isRecording
+        //   ? (isPaused ? MenuIcons.play : MenuIcons.stop)
+        //   : MenuIcons.play,
+        click: () => {
+          if (!isRecording) {
+            isRecording = startRecording(
+              settings.interval,
+              settings.resolution,
+              settings.framerate,
+              this.tray
+            );
+            isPaused = false;
+          } else if (isPaused) {
+            resumeRecording(settings.interval, this.tray);
+            isPaused = false;
+          } else {
+            pauseRecording(this.tray);
+            isPaused = true;
+          }
+          this.tray.setContextMenu(this.buildMenu());
         },
+        accelerator: 'CommandOrControl+R',
       },
-      { // TODO: make it only show when recording is active
-        label: 'Stop Recording',
-        accelerator: 'CommandOrControl+Shift+S',
+      {
+        label: 'Export Recording',
+        // icon: MenuIcons.export,
         click: async () => {
-          await exportRecording();
+          await exportRecording(this.tray);
+          isRecording = false;
+          isPaused = false;
+          this.tray.setContextMenu(this.buildMenu());
         },
+        accelerator: 'CommandOrControl+E',
+        enabled: isRecording && isPaused,
       },
       {type: 'separator'},
       {
@@ -94,12 +122,15 @@ export default class MenuBuilder {
         click: () => {
           if (this.settingsWindow) {
             this.settingsWindow.focus();
+            this.settingsWindow.webContents.closeDevTools();
             return;
           }
 
           this.settingsWindow = new BrowserWindow({
             width: 1024,
             height: 728,
+            frame: false,
+            titleBarStyle: 'hidden',
             webPreferences: {
               nodeIntegration: false,
               contextIsolation: true,
@@ -107,15 +138,18 @@ export default class MenuBuilder {
             },
           });
 
-          console.log('Preload path:', path.join(__dirname, '../../.erb/dll/preload.js'));
-          this.settingsWindow.webContents.openDevTools();
-
           // Add error handler
           this.settingsWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error('Failed to load:', errorDescription);
           });
 
           this.settingsWindow.loadURL(resolveHtmlPath('index.html'));
+
+          this.settingsWindow.webContents.on('did-finish-load', () => {
+            if (this.settingsWindow?.webContents.isDevToolsOpened()) {
+              this.settingsWindow.webContents.closeDevTools();
+            }
+          });
 
           this.settingsWindow.on('closed', () => {
             this.settingsWindow = null;
@@ -152,7 +186,7 @@ export default class MenuBuilder {
           },
         },
       ]);
-    return contextMenu;
+    return menu;
   }
 
   setCheckForUpdatesMenuItem(enabled: boolean) {
