@@ -199,7 +199,8 @@
       },
       {
         "from": "ffmpeg",
-        "to": "ffmpeg"
+        "to": "ffmpeg",
+        "filter": ["**/*"]
       }
     ],
     "mac": {
@@ -216,7 +217,12 @@
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSCameraUsageDescription": "This app needs access to camera when used to record screen.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone when used to record screen.",
+        "NSScreenCaptureUsageDescription": "This app needs access to screen capture to create timelapses."
+      }
     },
     "dmg": {
       "icon": "assets/DayReplayIcon.png",

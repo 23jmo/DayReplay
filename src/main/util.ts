@@ -197,15 +197,18 @@ export async function exportRecording(tray: Tray) {
   }
 
   try {
-    log.info("hello bruh");
     log.info('Using temp directory:', tempDir);
 
     // Get the ffmpeg path that was set up earlier
     const ffmpegPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
+      ? path.join(process.resourcesPath, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
       : path.join(__dirname, '../../ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
 
     log.info('Using FFmpeg path for export:', ffmpegPath);
+
+    if (!fs.existsSync(ffmpegPath)) {
+      throw new Error(`FFmpeg not found at ${ffmpegPath}`);
+    }
 
     // Create a new ffmpeg command with the correct path
     const command = ffmpeg()

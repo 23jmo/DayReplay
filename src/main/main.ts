@@ -11,7 +11,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { app, BrowserWindow, Menu, ipcMain, Tray, dialog } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences } from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
@@ -235,6 +235,17 @@ app
         'The application failed to start properly. Please try reinstalling the app.'
       );
       app.quit();
+    }
+
+    // Request screen capture permission
+    if (process.platform === 'darwin') {
+      const hasAccess = systemPreferences.getMediaAccessStatus('screen') === 'granted';
+      if (!hasAccess) {
+        dialog.showErrorBox(
+          'Permission Required',
+          'Please enable screen recording permission for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording'
+        );
+      }
     }
   })
   .catch((error) => {
