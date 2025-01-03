@@ -10,7 +10,8 @@
  */
 
 import path from 'path';
-import { app, BrowserWindow, Menu, ipcMain, Tray } from 'electron';
+import fs from 'fs';
+import { app, BrowserWindow, Menu, ipcMain, Tray, dialog } from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
@@ -20,6 +21,7 @@ import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
 import store from './store';
 import type { Settings } from './store';
+import { TrayIcons } from './assets';
 
 class AppUpdater {
   constructor() {
@@ -163,37 +165,80 @@ app
   .whenReady()
   .then(async () => {
     console.log('app ready');
-    const tray = new Tray(path.join(__dirname, '../../assets/icon.png'));
-    const menuBuilder = new MenuBuilder(tray);
-    const contextMenu = menuBuilder.buildMenu();
-    tray.setContextMenu(contextMenu);
+    log.info('Creating tray with icon:', TrayIcons.default);
 
-    const mb = menubar({
-      tray,
-    });
+    try {
+      log.info('App is packaged:', app.isPackaged);
+      log.info('Resources path:', process.resourcesPath);
+      log.info('App path:', app.getAppPath());
+      log.info('Looking for tray icon at:', TrayIcons.default);
 
-    mb.on('ready', () => {
-      console.log('Menubar is ready');
-      mb.tray.removeAllListeners();
+      if (!fs.existsSync(TrayIcons.default)) {
+        log.error('Tray icon not found!');
+        // List the contents of the assets directory
+        const assetsDir = path.dirname(path.dirname(TrayIcons.default));
+        log.info('Contents of assets directory:', fs.readdirSync(assetsDir));
+        throw new Error(`Tray icon not found at ${TrayIcons.default}`);
+      }
 
-      mb.tray.setToolTip('DayReplay');
-      mb.tray.setIgnoreDoubleClickEvents(true);
+      log.info('Tray icon found, creating tray...');
+      const tray = new Tray(TrayIcons.default);
+      const menuBuilder = new MenuBuilder(tray);
+      const contextMenu = menuBuilder.buildMenu();
+      tray.setContextMenu(contextMenu);
 
-      mb.hideWindow();
+      log.info('Tray created successfully');
 
-      mb.tray.on('right-click', (_event, bounds) => {
-        mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+      const mb = menubar({
+        tray,
+        index: resolveHtmlPath('index.html'),
+        preloadWindow: true,
+        showDockIcon: false,
       });
-      mb.tray.on('click', (_event, bounds) => {
-        mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+
+      mb.on('ready', () => {
+        log.info('Menubar is ready');
+        mb.tray.removeAllListeners();
+
+        mb.tray.setToolTip('DayReplay');
+        mb.tray.setIgnoreDoubleClickEvents(true);
+
+        mb.hideWindow();
+
+        mb.tray.on('right-click', (_event, bounds) => {
+          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+        });
+        mb.tray.on('click', (_event, bounds) => {
+          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+        });
+
+        log.info('Menubar setup complete');
+        Menu.setApplicationMenu(contextMenu);
       });
 
-      console.log('Menubar is ready');
-      Menu.setApplicationMenu(contextMenu);
-    });
+      mb.on('after-create-window', () => {
+        log.info('Menubar window created');
+      });
+
+      mb.on('after-show', () => {
+        log.info('Menubar window shown');
+      });
+
+      mb.on('after-hide', () => {
+        log.info('Menubar window hidden');
+      });
+
+    } catch (error) {
+      log.error('Failed to create tray:', error);
+      dialog.showErrorBox(
+        'Failed to create tray',
+        'The application failed to start properly. Please try reinstalling the app.'
+      );
+      app.quit();
+    }
   })
   .catch((error) => {
-    console.error('Error in app.whenReady:', error);
+    log.error('Error in app.whenReady:', error);
   });
 
 ipcMain.on('window-controls', (_, command) => {
