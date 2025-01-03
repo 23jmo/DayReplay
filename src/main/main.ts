@@ -237,16 +237,8 @@ app
       app.quit();
     }
 
-    // Request screen capture permission
-    if (process.platform === 'darwin') {
-      const hasAccess = systemPreferences.getMediaAccessStatus('screen') === 'granted';
-      if (!hasAccess) {
-        dialog.showErrorBox(
-          'Permission Required',
-          'Please enable screen recording permission for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording'
-        );
-      }
-    }
+    // Remove the initial permission check since it's not reliable
+    // We'll check permissions when we actually try to take screenshots
   })
   .catch((error) => {
     log.error('Error in app.whenReady:', error);

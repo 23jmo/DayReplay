@@ -5,8 +5,10 @@ import path from 'path';
 import { Menubar } from 'menubar';
 import fs from 'fs';
 import log from 'electron-log';
-import { dialog, app, Tray } from 'electron';
+import { dialog, app, Tray, desktopCapturer } from 'electron';
 import ffmpeg from 'fluent-ffmpeg';
+import { systemPreferences } from 'electron';
+import { writeFile } from 'fs/promises';
 
 import {TrayIcons} from './assets'
 
@@ -71,13 +73,13 @@ try {
   throw error;
 }
 
+let screenshotCount = 0;
 let recordingInterval: ReturnType<typeof setInterval> | null = null;
 let framerate: number;
 let resolution: string;
+let intervalInSeconds: number;
 
 const tempDir = path.join(app.getPath('temp'), 'DayReplay');
-
-const screenshot = require('screenshot-desktop');
 
 log.transports.file.level = 'debug';
 
@@ -97,6 +99,107 @@ export function resolveHtmlPath(htmlFileName: string) {
   return `file://${path.resolve(__dirname, '../renderer/', htmlFileName)}`;
 }
 
+// Add new screenshot function using desktopCapturer
+async function takeScreenshot(outputPath: string): Promise<string> {
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: {
+      width: 1920,
+      height: 1080
+    }
+  });
+
+  if (sources.length === 0) {
+    throw new Error('No screen sources found');
+  }
+
+  // Get the primary display
+  const primarySource = sources[0];
+  const image = primarySource.thumbnail;
+
+  if (!image) {
+    throw new Error('Failed to capture screenshot');
+  }
+
+  try {
+    // Convert the NativeImage to a buffer and save it
+    // Use a higher compression (lower quality) to save space
+    const buffer = image.toJPEG(75);
+    await writeFile(outputPath, buffer);
+
+    // Verify the file was written successfully
+    const stats = await fs.promises.stat(outputPath);
+    if (stats.size === 0) {
+      throw new Error('Screenshot file is empty');
+    }
+
+    return outputPath;
+  } catch (error: any) {
+    log.error('Error saving screenshot:', error);
+    // Clean up partial file if it exists
+    try {
+      if (fs.existsSync(outputPath)) {
+        await fs.promises.unlink(outputPath);
+      }
+    } catch (cleanupError) {
+      log.error('Error cleaning up failed screenshot:', cleanupError);
+    }
+    throw error;
+  }
+}
+
+async function checkScreenRecordingPermission(): Promise<boolean> {
+  if (process.platform !== 'darwin') return true;
+
+  try {
+    // Try to take a test screenshot first
+    const testFile = path.join(tempDir, 'test.jpg');
+    await takeScreenshot(testFile);
+    // Clean up test file
+    if (fs.existsSync(testFile)) {
+      fs.unlinkSync(testFile);
+    }
+    return true;
+  } catch (error: any) {
+    log.error('Error in permission check:', error);
+    // Only check system preferences if the screenshot failed
+    // @ts-ignore - screen is a valid media type in recent Electron versions
+    const status = systemPreferences.getMediaAccessStatus('screen');
+    log.info('Screen recording permission status:', status);
+    return status === 'granted';
+  }
+}
+
+// Add function to manage temp directory
+async function ensureTempDir(): Promise<void> {
+  try {
+    await fs.promises.mkdir(tempDir, { recursive: true });
+
+    // Clean directory but keep it
+    const files = await fs.promises.readdir(tempDir);
+    await Promise.all(
+      files.map((file) => fs.promises.unlink(path.join(tempDir, file)))
+    );
+  } catch (error) {
+    log.error('Error managing temp directory:', error);
+    throw error;
+  }
+}
+
+// Add getter functions for recording status
+export function getRecordingStats() {
+  return {
+    screenshotCount,
+    isRecording: recordingInterval !== null,
+    interval: intervalInSeconds,
+    elapsedTime: screenshotCount * intervalInSeconds,
+  };
+}
+
+export function resetRecordingStats() {
+  screenshotCount = 0;
+}
+
 export function startRecording(interval: number, res: string, fps: number, tray: Tray) {
   if (recordingInterval) {
     log.info('Recording already in progress');
@@ -105,16 +208,20 @@ export function startRecording(interval: number, res: string, fps: number, tray:
 
   framerate = fps;
   resolution = res;
+  intervalInSeconds = interval;
+  resetRecordingStats();
 
   // set active icon
   tray.setImage(TrayIcons.active);
 
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-  // make sure the directory is empty
-  fs.readdirSync(tempDir).forEach((file) => {
-    fs.unlinkSync(path.join(tempDir, file));
+  // Initialize temp directory
+  ensureTempDir().catch((error) => {
+    log.error('Failed to initialize temp directory:', error);
+    dialog.showErrorBox(
+      'Error',
+      'Failed to create temporary directory for screenshots. Please try again.'
+    );
+    return false;
   });
 
   log.info(
@@ -125,15 +232,53 @@ export function startRecording(interval: number, res: string, fps: number, tray:
     'framerate:',
     framerate,
   );
-  let index = 1;
+
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 3;
+
   recordingInterval = setInterval(async () => {
     try {
-      const fileName = path.join(tempDir, `${index++}.jpg`);
-      const imgPath = await screenshot({ filename: fileName });
-      log.debug('Screenshot saved to:', imgPath);
-    } catch (error) {
+      const hasPermission = await checkScreenRecordingPermission();
+      if (!hasPermission) {
+        log.error('Screen recording permission denied');
+        dialog.showErrorBox(
+          'Permission Required',
+          'Screen recording permission was denied. Please enable screen recording for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording, then try again.'
+        );
+        pauseRecording(tray);
+        return;
+      }
+
+      const fileName = path.join(tempDir, `${screenshotCount + 1}.jpg`);
+      const imgPath = await takeScreenshot(fileName);
+      screenshotCount++; // Increment counter after successful screenshot
+      log.debug('Screenshot saved to:', imgPath, 'Total screenshots:', screenshotCount);
+      consecutiveErrors = 0; // Reset error counter on success
+    } catch (error: any) {
       log.error('Error taking screenshot:', error);
-      throw error;
+      consecutiveErrors++;
+
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        log.error('Too many consecutive errors, stopping recording');
+        dialog.showErrorBox(
+          'Recording Error',
+          'Failed to take screenshots multiple times. Recording has been stopped.'
+        );
+        pauseRecording(tray);
+        return;
+      }
+
+      // Check if error is permission related
+      if (error.message?.includes('permission') || error.message?.includes('denied')) {
+        dialog.showErrorBox(
+          'Permission Required',
+          'Screen recording permission was denied. Please enable screen recording for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording, then try again.'
+        );
+        pauseRecording(tray);
+      } else {
+        // Log error but continue trying
+        log.error('Screenshot error:', error);
+      }
     }
   }, interval * 1000);
 
@@ -143,7 +288,7 @@ export function startRecording(interval: number, res: string, fps: number, tray:
 export function pauseRecording(tray: Tray) {
   if (recordingInterval) {
     clearInterval(recordingInterval);
-    log.info('Recording paused');
+    log.info('Recording paused. Total screenshots taken:', screenshotCount);
     recordingInterval = null;
 
     // set default icon
@@ -252,12 +397,12 @@ export function resumeRecording(interval: number, tray: Tray) {
 
   tray.setImage(TrayIcons.active);
 
-  let index = fs.readdirSync(tempDir).length + 1;
   recordingInterval = setInterval(async () => {
     try {
-      const fileName = path.join(tempDir, `${index++}.jpg`);
-      const imgPath = await screenshot({ filename: fileName });
-      log.debug('Screenshot saved to:', imgPath);
+      const fileName = path.join(tempDir, `${screenshotCount + 1}.jpg`);
+      const imgPath = await takeScreenshot(fileName);
+      screenshotCount++; // Increment counter after successful screenshot
+      log.debug('Screenshot saved to:', imgPath, 'Total screenshots:', screenshotCount);
     } catch (error) {
       log.error('Error taking screenshot:', error);
       throw error;
