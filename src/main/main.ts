@@ -18,7 +18,7 @@ import log from 'electron-log';
 import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
-import { resolveHtmlPath } from './util';
+import { getRecordingStats, resolveHtmlPath } from './util';
 import store from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
@@ -40,16 +40,27 @@ ipcMain.on('ipc-example', async (event, arg) => {
 });
 
 ipcMain.handle('settings:save', async (_, settings: Settings) => {
+  //@ts-ignore
   store.set('interval', settings.interval);
+  //@ts-ignore
   store.set('resolution', settings.resolution);
+  //@ts-ignore
   store.set('framerate', settings.framerate);
   return true;
 });
 
+ipcMain.handle('screenshots-taken', () => {
+  const stats = getRecordingStats();
+  return stats.screenshotCount;
+});
+
 ipcMain.handle('settings:get', async () => {
   return {
+    //@ts-ignore
     interval: store.get('interval'),
+    //@ts-ignore
     resolution: store.get('resolution'),
+    //@ts-ignore
     framerate: store.get('framerate'),
   } as Settings;
 });

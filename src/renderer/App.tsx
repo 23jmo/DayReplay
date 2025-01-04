@@ -1,6 +1,7 @@
-import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import './App.css';
+import FrameratePicker from './FrameratePicker';
 
 declare global {
   interface Window {
@@ -13,6 +14,8 @@ declare global {
         close: () => void;
         minimize: () => void;
         maximize: () => void;
+        send: (channel: string, ...args: any[]) => void;
+        on: (channel: string, callback: (data: any) => void) => void;
       };
     };
   }
@@ -133,6 +136,7 @@ export default function App() {
           <div className="content">
             <Routes>
               <Route path="/" element={<Settings />} />
+              <Route path="/frameratePicker" element={<FrameratePicker />} />
             </Routes>
           </div>
         </div>

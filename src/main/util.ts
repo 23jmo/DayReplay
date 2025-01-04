@@ -200,13 +200,12 @@ export function resetRecordingStats() {
   screenshotCount = 0;
 }
 
-export function startRecording(interval: number, res: string, fps: number, tray: Tray) {
+export function startRecording(interval: number, res: string, tray: Tray) {
   if (recordingInterval) {
     log.info('Recording already in progress');
     return false;
   }
 
-  framerate = fps;
   resolution = res;
   intervalInSeconds = interval;
   resetRecordingStats();
@@ -229,8 +228,6 @@ export function startRecording(interval: number, res: string, fps: number, tray:
     interval,
     'resolution:',
     resolution,
-    'framerate:',
-    framerate,
   );
 
   let consecutiveErrors = 0;
@@ -296,7 +293,7 @@ export function pauseRecording(tray: Tray) {
   }
 }
 
-export async function exportRecording(tray: Tray) {
+export async function exportRecording(tray: Tray, fps: number) {
   pauseRecording(tray);
   const files = fs.readdirSync(tempDir);
 
@@ -322,7 +319,7 @@ export async function exportRecording(tray: Tray) {
 
   if (canceled || !filePath) {
     const result = await dialog.showMessageBox({
-      type:'warning',
+      type: 'warning',
       message: 'Are you sure you want to cancel?',
       detail: 'You will lose all progress and all screenshots will be deleted.',
       buttons: [
@@ -359,7 +356,7 @@ export async function exportRecording(tray: Tray) {
     const command = ffmpeg()
       .setFfmpegPath(ffmpegPath)
       .input(path.join(tempDir, '%d.jpg'))
-      .inputOptions(['-framerate', framerate.toString(), '-start_number', '1'])
+      .inputOptions(['-framerate', fps.toString(), '-start_number', '1'])
       .videoCodec('libx264')
       .outputOptions(['-pix_fmt yuv420p', '-preset medium', '-y'])
       .on('start', (cmd: string) => {
@@ -368,6 +365,11 @@ export async function exportRecording(tray: Tray) {
       .output(filePath)
       .on('end', () => {
         log.info('Timelapse export completed:', filePath);
+        dialog.showMessageBox({
+          type: 'info',
+          message: 'Timelapse export completed',
+          detail: 'Your replay has been saved to ' + filePath,
+        });
       })
       .on('error', (err: Error) => {
         log.error('Error exporting timelapse:', err);
@@ -386,7 +388,7 @@ export async function exportRecording(tray: Tray) {
     throw error;
   }
 
-  // clearTempDir();
+  clearTempDir();
 }
 
 export function resumeRecording(interval: number, tray: Tray) {

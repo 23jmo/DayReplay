@@ -8,6 +8,8 @@ import {
   MenuItemConstructorOptions,
   MenuItem,
   Tray,
+  dialog,
+  ipcMain,
 } from 'electron';
 
 import type { Menubar } from 'menubar';
@@ -38,6 +40,8 @@ export default class MenuBuilder {
 
   private updateReadyForInstallMenuItem: MenuItem;
 
+  private aboutMenuItem: MenuItem;
+
   private settingsWindow: BrowserWindow | null = null;
 
   private tray: Tray;
@@ -49,6 +53,19 @@ export default class MenuBuilder {
   constructor(tray: Tray) {
 
     this.tray = tray;
+
+    this.aboutMenuItem = new MenuItem({
+      label: 'About',
+      enabled: true,
+      click: () => {
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'About DayReplay',
+          message: 'DayReplay',
+          detail: `Version: ${app.getVersion()}\n\nDayReplay is a tool for recording and exporting a timelapse of your day.`,
+        });
+      },
+    });
 
     this.checkForUpdatesMenuItem = new MenuItem({
       label: 'Check for updates',
@@ -67,7 +84,7 @@ export default class MenuBuilder {
     this.updateReadyForInstallMenuItem = new MenuItem({
       label: 'Restart to update',
       visible: false,
-      click: () => {
+      click: (_menuItem, _window, _event) => {
         autoUpdater.quitAndInstall();
       },
     });
@@ -110,37 +127,44 @@ export default class MenuBuilder {
 
   buildMenu(): Menu {
     const settings = {
+      //@ts-ignore
       interval: store.get('interval'),
+      //@ts-ignore
       resolution: store.get('resolution'),
-      framerate: store.get('framerate'),
     };
 
     const progress = isRecording ? {
       label: this.updateStatsLabel,
       enabled: false,
     } : {
+      label: 'Not Recording',
+      enabled: false,
     };
 
-    const menu = Menu.buildFromTemplate([
-      progress,
+    const menuItems: MenuItemConstructorOptions[] = [];
+
+    if (isRecording) {
+      menuItems.push({
+        label: this.updateStatsLabel,
+        enabled: false,
+      });
+    }
+
+    menuItems.push(
       {
         label: `Taking Screenshots Every ${settings.interval}s at ${settings.resolution}`,
         enabled: false,
       },
-      { type: 'separator' },
+      { type: 'separator' as const },
       {
         label: isRecording
           ? (isPaused ? 'Resume Recording' : 'Stop Recording')
           : 'Start Recording',
-        // icon: isRecording
-        //   ? (isPaused ? MenuIcons.play : MenuIcons.stop)
-        //   : MenuIcons.play,
         click: () => {
           if (!isRecording) {
             isRecording = startRecording(
               settings.interval,
               settings.resolution,
-              settings.framerate,
               this.tray
             );
             isPaused = false;
@@ -162,18 +186,42 @@ export default class MenuBuilder {
       },
       {
         label: 'Export Recording',
-        // icon: MenuIcons.export,
         click: async () => {
-          await exportRecording(this.tray);
-          isRecording = false;
-          isPaused = false;
-          this.stopStatsUpdate();
-          this.tray.setContextMenu(this.buildMenu());
+          const pickerWindow = new BrowserWindow({
+            width: 350,
+            height: 350,
+            resizable: true,
+            fullscreenable: false,
+            show: false,
+            frame: false,
+            titleBarStyle: 'hidden',
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              preload: app.isPackaged
+                ? path.join(__dirname, 'preload.js')
+                : path.join(__dirname, '../../.erb/dll/preload.js'),
+            },
+          });
+
+          ipcMain.once('select-framerate', async (_event, fps: number) => {
+            pickerWindow.close();
+            await exportRecording(this.tray, fps);
+            isRecording = false;
+            isPaused = false;
+            this.stopStatsUpdate();
+            this.tray.setContextMenu(this.buildMenu());
+          });
+
+          pickerWindow.loadURL(resolveHtmlPath('index.html') + '#/frameratePicker');
+          pickerWindow.once('ready-to-show', () => {
+            pickerWindow.show();
+          });
         },
         accelerator: 'CommandOrControl+E',
         enabled: isRecording && isPaused,
       },
-      {type: 'separator'},
+      { type: 'separator' as const },
       {
         label: 'Settings',
         accelerator: 'CommandOrControl+Shift+.',
@@ -214,37 +262,59 @@ export default class MenuBuilder {
           });
         },
       },
-      { type: 'separator' },
-        {
-          label: 'Developer',
-          submenu: [
-            {
-              role: 'reload',
-              accelerator: 'CommandOrControl+R',
-            },
-            {
-              role: 'toggleDevTools',
-              accelerator:
-                process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
-            },
-            {
-              label: 'View Application Logs',
-            },
-          ],
-        },
-        { type: 'separator' },
-        this.checkForUpdatesMenuItem,
-        this.updateAvailableMenuItem,
-        this.updateReadyForInstallMenuItem,
-        {
-          label: 'Quit DayReplay',
-          accelerator: 'CommandOrControl+Q',
-          click: () => {
-            app.quit();
+      { type: 'separator' as const },
+      {
+        label: 'Developer',
+        submenu: [
+          {
+            role: 'reload',
+            accelerator: 'CommandOrControl+R',
           },
+          {
+            role: 'toggleDevTools',
+            accelerator:
+              process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+          },
+          {
+            label: 'View Application Logs',
+          },
+        ],
+      },
+      { type: 'separator' as const },
+      {
+        ...this.checkForUpdatesMenuItem,
+        click: (menuItem, window, event) => {
+          this.checkForUpdatesMenuItem.click();
+        }
+      },
+      {
+        ...this.updateAvailableMenuItem,
+        click: (menuItem, window, event) => {
+          this.updateAvailableMenuItem.click();
+        }
+      },
+      {
+        ...this.updateReadyForInstallMenuItem,
+        click: (menuItem, window, event) => {
+          this.updateReadyForInstallMenuItem.click();
+        }
+      },
+      {
+        ...this.aboutMenuItem,
+        click: (menuItem, window, event) => {
+          this.aboutMenuItem.click();
+        }
+      },
+      {
+        label: 'Quit DayReplay',
+        accelerator: 'CommandOrControl+Q',
+        click: () => {
+          app.quit();
         },
-      ]);
-    return menu;
+      }
+    );
+
+    return Menu.buildFromTemplate(menuItems);
   }
 
   incrementScreenshotCount() {
