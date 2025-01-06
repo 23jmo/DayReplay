@@ -2,9 +2,10 @@
 Phase 1:
   ☐ publish the app - set up build as dmg
   ☐ set up auto-updater
+  ☐ add a way to rescue unexported screenshots
 Phase 2:
   ☐ create a library of previous timelapses
-  ☐ set up mongo or maybe firebase to store these timelapses
+  ☐ set up mongo or maybe firebase to store these timelapses to account for user
   ☐ react routing and a sidebar with settings, library, and statistics?
   ☐ ability to review previous timelapses
   ☐ ability to delete timelapses, export timelapses
