@@ -1,4 +1,17 @@
-<img src=".erb/img/erb-banner.svg" width="100%" />
+
+# Day Replay
+
+<p> 
+Day Replay is an app that records what you do in a day. Takes a timelapse of your screen and you can then export it after your day is over. There is truly no better way to reflect on your productivity than to watch a replay of exactly how you spent your time.
+</p>
+
+## Installation
+
+### Version 1.0.0: 
+- <a href="release/build/Day Replay-4.6.0-arm64.dmg">Apple Silicon</a>
+- <a href="release/build/Day Replay-4.6.0.dmg">Intel</a>
+
+<!-- <img src=".erb/img/erb-banner.svg" width="100%" />
 
 <br>
 
@@ -156,4 +169,4 @@ MIT © [Electron React Boilerplate](https://github.com/electron-react-boilerplat
 [github-tag-image]: https://img.shields.io/github/tag/electron-react-boilerplate/electron-react-boilerplate.svg?label=version
 [github-tag-url]: https://github.com/electron-react-boilerplate/electron-react-boilerplate/releases/latest
 [stackoverflow-img]: https://img.shields.io/badge/stackoverflow-electron_react_boilerplate-blue.svg
-[stackoverflow-url]: https://stackoverflow.com/questions/tagged/electron-react-boilerplate
+[stackoverflow-url]: https://stackoverflow.com/questions/tagged/electron-react-boilerplate -->
