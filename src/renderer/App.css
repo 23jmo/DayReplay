@@ -1,8 +1,16 @@
 /*
  * @NOTE: Prepend a `~` to css file paths that are in your node_modules
  *        See https://github.com/webpack-contrib/sass-loader#imports
- */
-body {
+ /* */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+
+/* body {
   position: relative;
   color: white;
   height: 100vh;
@@ -147,8 +155,7 @@ h2 {
   background: #28c840;
 }
 
-/* Adjust main content to account for titlebar */
 .content {
   margin-top: 32px;
   padding: 20px;
-}
+}  */

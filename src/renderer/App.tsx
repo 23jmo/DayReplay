@@ -38,7 +38,6 @@ function Settings() {
   const [resolution, setResolution] = useState('1920x1080');
   const [framerate, setFramerate] = useState(30);
 
-  // Load settings when component mounts
   useEffect(() => {
     const loadSettings = async () => {
       if (!window.electronAPI) {
@@ -66,63 +65,72 @@ function Settings() {
   };
 
   return (
-    <div className="settings-container">
-      <h2>Settings</h2>
+    <div className="p-8 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-8">Settings</h2>
 
-      <div className="setting-group">
-        <label htmlFor="interval">
-          Time between shots (seconds):
-          <select
-            id="interval"
-            value={interval}
-            onChange={(e) => setInterval(Number(e.target.value))}
-          >
-            {intervalOptions.map((intvl) => (
-              <option key={intvl} value={intvl}>
-                {intvl}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="space-y-6">
+        <div className="mb-6">
+          <label htmlFor="interval" className="block text-sm font-medium text-gray-700 mb-2">
+            Time between shots (seconds):
+            <select
+              id="interval"
+              value={interval}
+              onChange={(e) => setInterval(Number(e.target.value))}
+              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              {intervalOptions.map((intvl) => (
+                <option key={intvl} value={intvl}>
+                  {intvl}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mb-6">
+          <label htmlFor="resolution" className="block text-sm font-medium text-gray-700 mb-2">
+            Resolution:
+            <select
+              id="resolution"
+              value={resolution}
+              onChange={(e) => setResolution(e.target.value)}
+              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              {resolutionOptions.map((res) => (
+                <option key={res} value={res}>
+                  {res}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mb-6">
+          <label htmlFor="framerate" className="block text-sm font-medium text-gray-700 mb-2">
+            Output Framerate:
+            <select
+              id="framerate"
+              value={framerate}
+              onChange={(e) => setFramerate(Number(e.target.value))}
+              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            >
+              {frameRateOptions.map((fps) => (
+                <option key={fps} value={fps}>
+                  {fps}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          className="w-full bg-blue-500 text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors duration-200 text-base font-medium"
+        >
+          Save Settings
+        </button>
       </div>
-
-      <div className="setting-group">
-        <label htmlFor="resolution">
-          Resolution:
-          <select
-            id="resolution"
-            value={resolution}
-            onChange={(e) => setResolution(e.target.value)}
-          >
-            {resolutionOptions.map((res) => (
-              <option key={res} value={res}>
-                {res}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="setting-group">
-        <label htmlFor="framerate">
-          Output Framerate:
-          <select
-            id="framerate"
-            value={framerate}
-            onChange={(e) => setFramerate(Number(e.target.value))}
-          >
-            {frameRateOptions.map((fps) => (
-              <option key={fps} value={fps}>
-                {fps}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <button type="button" onClick={handleSave}>
-        Save Settings
-      </button>
     </div>
   );
 }
