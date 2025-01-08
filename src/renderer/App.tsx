@@ -1,7 +1,15 @@
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 import FrameratePicker from './FrameratePicker';
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 declare global {
   interface Window {
@@ -22,7 +30,7 @@ declare global {
 }
 
 function ProfileButton() {
-  return <button className="profile-button">Profile</button>;
+  return <Button variant="ghost">Profile</Button>;
 }
 
 function TitleBar() {
@@ -53,8 +61,8 @@ function Settings() {
   }, []);
 
   const resolutionOptions = ['1920x1080', '1280x720', '3840x2160'];
-  const frameRateOptions = ['24', '30', '60'];
-  const intervalOptions = ['1', '3', '5', '10', '15', '30'];
+  const frameRateOptions = [24, 30, 60];
+  const intervalOptions = [1, 3, 5, 10, 15, 30];
 
   const handleSave = async () => {
     await window.electronAPI.saveSettings({
@@ -66,70 +74,80 @@ function Settings() {
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-8">Settings</h2>
+      <h2 className="text-2xl font-semibold text-foreground mb-8">Settings</h2>
 
       <div className="space-y-6">
-        <div className="mb-6">
-          <label htmlFor="interval" className="block text-sm font-medium text-gray-700 mb-2">
-            Time between shots (seconds):
-            <select
-              id="interval"
-              value={interval}
-              onChange={(e) => setInterval(Number(e.target.value))}
-              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              {intervalOptions.map((intvl) => (
-                <option key={intvl} value={intvl}>
-                  {intvl}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">
+            Time between shots (seconds)
           </label>
+          <Select
+            value={interval.toString()}
+            onValueChange={(value: string) => {
+              setInterval(Number(value));
+              handleSave();
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent>
+              {intervalOptions.map((value) => (
+                <SelectItem key={value} value={value.toString()}>
+                  {value}s
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="mb-6">
-          <label htmlFor="resolution" className="block text-sm font-medium text-gray-700 mb-2">
-            Resolution:
-            <select
-              id="resolution"
-              value={resolution}
-              onChange={(e) => setResolution(e.target.value)}
-              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              {resolutionOptions.map((res) => (
-                <option key={res} value={res}>
-                  {res}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">
+            Resolution
           </label>
+          <Select
+            value={resolution}
+            onValueChange={(value: string) => {
+              setResolution(value);
+              handleSave();
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select resolution" />
+            </SelectTrigger>
+            <SelectContent>
+              {resolutionOptions.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="mb-6">
-          <label htmlFor="framerate" className="block text-sm font-medium text-gray-700 mb-2">
-            Output Framerate:
-            <select
-              id="framerate"
-              value={framerate}
-              onChange={(e) => setFramerate(Number(e.target.value))}
-              className="ml-4 w-48 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              {frameRateOptions.map((fps) => (
-                <option key={fps} value={fps}>
-                  {fps}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">
+            Output Framerate
           </label>
+          <Select
+            value={framerate.toString()}
+            onValueChange={(value: string) => {
+              setFramerate(Number(value));
+              handleSave();
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select framerate" />
+            </SelectTrigger>
+            <SelectContent>
+              {frameRateOptions.map((value) => (
+                <SelectItem key={value} value={value.toString()}>
+                  {value} FPS
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          className="w-full bg-blue-500 text-white px-6 py-3 rounded-md hover:bg-blue-600 transition-colors duration-200 text-base font-medium"
-        >
-          Save Settings
-        </button>
       </div>
     </div>
   );
