@@ -30,6 +30,14 @@
     --destructive-foreground: 210 40% 98%;
     --ring: 215 20.2% 65.1%;
     --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
   .dark {
@@ -52,6 +60,26 @@
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
     --ring: 216 34% 17%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+
+  .position-fixed {
+    position: fixed;
+  }
+  .app-region-drag {
+    -webkit-app-region: drag;
+  }
+
+  .app-region-no-drag {
+    -webkit-app-region: no-drag;
   }
 }
 
@@ -214,3 +242,37 @@ h2 {
   margin-top: 32px;
   padding: 20px;
 }  */
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-titlebar {
+  flex: 0 0 auto; /* Title bar takes only as much space as it needs */
+}
+
+.app-content {
+  display: flex;
+  flex: 1; /* Sidebar and main content share the remaining space */
+}
+
+.app-sidebar {
+  flex: 0 0 250px; /* Sidebar has a fixed width */
+}
+
+.app-main {
+  flex: 1; /* Main content takes the remaining space */
+  overflow-y: auto; /* Allows scrolling if content overflows */
+}
