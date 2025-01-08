@@ -330,15 +330,23 @@ export async function exportRecording(tray: Tray, fps: number) {
     });
 
     if (result.response !== 0) {
+      log.info('Export aborted');
       return;
     }
 
-    log.info('Export cancelled');
+    log.info('Export cancelled - screenshots deleted');
     clearTempDir();
     return;
   }
 
-  try {
+  await exportTimelapse(tempDir, filePath, fps);
+
+}
+
+async function exportTimelapse(tempDir: string, filePath: string, fps: number) {
+
+  log.info('Exporting timelapse with files:', fs.readdirSync(tempDir));
+    try {
     log.info('Using temp directory:', tempDir);
 
     // Get the ffmpeg path that was set up earlier
@@ -363,6 +371,9 @@ export async function exportRecording(tray: Tray, fps: number) {
         log.info('FFmpeg command:', cmd);
       })
       .output(filePath)
+      .on("progress", (progress: any) => {
+        log.info('FFmpeg progress:', progress.string);
+      })
       .on('end', () => {
         log.info('Timelapse export completed:', filePath);
         dialog.showMessageBox({
@@ -390,6 +401,7 @@ export async function exportRecording(tray: Tray, fps: number) {
 
   clearTempDir();
 }
+
 
 export function resumeRecording(interval: number, tray: Tray) {
   if (recordingInterval) {

@@ -75,7 +75,10 @@ function Settings() {
           <select
             id="interval"
             value={interval}
-            onChange={(e) => setInterval(Number(e.target.value))}
+            onChange={(e) => {
+              setInterval(Number(e.target.value));
+              handleSave();
+            }}
           >
             {intervalOptions.map((intvl) => (
               <option key={intvl} value={intvl}>
@@ -92,7 +95,10 @@ function Settings() {
           <select
             id="resolution"
             value={resolution}
-            onChange={(e) => setResolution(e.target.value)}
+            onChange={(e) => {
+              setResolution(e.target.value);
+              handleSave();
+            }}
           >
             {resolutionOptions.map((res) => (
               <option key={res} value={res}>
@@ -109,7 +115,10 @@ function Settings() {
           <select
             id="framerate"
             value={framerate}
-            onChange={(e) => setFramerate(Number(e.target.value))}
+            onChange={(e) => {
+              setFramerate(Number(e.target.value));
+              handleSave();
+            }}
           >
             {frameRateOptions.map((fps) => (
               <option key={fps} value={fps}>
@@ -119,10 +128,6 @@ function Settings() {
           </select>
         </label>
       </div>
-
-      <button type="button" onClick={handleSave}>
-        Save Settings
-      </button>
     </div>
   );
 }
