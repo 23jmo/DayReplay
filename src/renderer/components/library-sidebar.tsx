@@ -154,6 +154,11 @@ const organizeTimeGroups = (days: DayEntry[]) => {
     }
   }
 
+  // Sort each group's entries by timestamp (newest first)
+  Days.forEach(group => {
+    group.entries.sort((a, b) => parseInt(b.day.startDate) - parseInt(a.day.startDate))
+  })
+
   return Days
 }
 
