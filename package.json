@@ -110,6 +110,7 @@
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "@types/video.js": "^7.3.58",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron-debug": "^3.2.0",
@@ -125,7 +126,8 @@
     "react-router-dom": "^6.16.0",
     "screenshot-desktop": "^1.15.1",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "video.js": "^8.21.0"
   },
   "devDependencies": {
     "@electron-forge/maker-dmg": "^7.6.0",

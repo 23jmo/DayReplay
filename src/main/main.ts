@@ -11,7 +11,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences, session, protocol } from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
@@ -70,6 +70,17 @@ ipcMain.handle('settings:get', async () => {
     //@ts-ignore
     framerate: settingsStore.get('framerate'),
   } as Settings;
+});
+
+ipcMain.handle('get-video-url', async (_, filePath) => {
+  try {
+    // Check if file exists
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return `local-file://${filePath}`;
+  } catch (error) {
+    console.error('Error accessing video file:', error);
+    return null;
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -262,6 +273,18 @@ app
     log.error('Error in app.whenReady:', error);
   });
 
+app.whenReady().then(() => {
+  // Register protocol handler
+  protocol.registerFileProtocol('local-file', (request, callback) => {
+    const filePath = request.url.replace('local-file://', '');
+    try {
+      return callback(decodeURIComponent(filePath));
+    } catch (error) {
+      console.error(error);
+    }
+  });
+});
+
 ipcMain.on('window-controls', (_, command) => {
   const window = BrowserWindow.getFocusedWindow();
   if (!window) return;
@@ -281,4 +304,20 @@ ipcMain.on('window-controls', (_, command) => {
       window.close();
       break;
   }
+});
+
+app.on('ready', () => {
+  // Set up CSP
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' 'unsafe-inline' file: data: blob: local-file:",
+          "img-src 'self' file: data: blob: local-file:",
+          "media-src 'self' file: blob: local-file:",
+        ],
+      },
+    });
+  });
 });

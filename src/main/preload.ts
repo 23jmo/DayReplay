@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { Day, DayEntry } from '../shared/types';
+import { DayEntry } from '../shared/types';
 
 console.log('🚀 Preload script is running');
 
@@ -15,6 +15,7 @@ interface ElectronAPI {
   sendMessage: (message: string) => void;
   getScreenshotCount: () => Promise<number>;
   getDays: () => Promise<DayEntry[]>;
+  getVideoUrl: (filePath: string) => Promise<string>;
 }
 
 declare global {
@@ -36,6 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendMessage: (message: string) => ipcRenderer.send('message', message),
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
   getDays: () => ipcRenderer.invoke('days:get'),
+  getVideoUrl: (filePath: string) => ipcRenderer.invoke('get-video-url', filePath),
 });
 
 contextBridge.exposeInMainWorld('electron', {
