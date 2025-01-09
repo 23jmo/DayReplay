@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { Day, DayEntry } from '../shared/types';
 
 console.log('🚀 Preload script is running');
 
@@ -13,6 +14,7 @@ interface ElectronAPI {
   saveSettings: (settings: Settings) => Promise<boolean>;
   sendMessage: (message: string) => void;
   getScreenshotCount: () => Promise<number>;
+  getDays: () => Promise<DayEntry[]>;
 }
 
 declare global {
@@ -33,6 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportRecording: () => ipcRenderer.invoke('recording:export'),
   sendMessage: (message: string) => ipcRenderer.send('message', message),
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
+  getDays: () => ipcRenderer.invoke('days:get'),
 });
 
 contextBridge.exposeInMainWorld('electron', {

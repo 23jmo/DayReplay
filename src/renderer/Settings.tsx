@@ -24,17 +24,10 @@ export default function Settings() {
   const frameRateOptions = [24, 30, 60];
   const intervalOptions = [1, 3, 5, 10, 15, 30];
 
-  const handleSave = async () => {
-    await window.electronAPI.saveSettings({
-      interval,
-      resolution,
-      framerate,
-    });
-  };
 
   return (
     <>
-      <div className="flex-1 flex-col p-10 max-w-4xl">
+      <div className="flex-1 flex-col max-w-4xl">
       <h2 className="text-2xl font-semibold text-foreground mb-8">Settings</h2>
 
       <div className="space-y-6">
@@ -44,9 +37,14 @@ export default function Settings() {
           </label>
           <Select
             value={interval.toString()}
-            onValueChange={(value: string) => {
-              setInterval(Number(value));
-              handleSave();
+            onValueChange={async (value: string) => {
+              const newInterval = Number(value);
+              setInterval(newInterval);
+              await window.electronAPI.saveSettings({
+                interval: newInterval,
+                resolution,
+                framerate,
+              });
             }}
           >
             <SelectTrigger className="w-full">
@@ -68,9 +66,13 @@ export default function Settings() {
           </label>
           <Select
             value={resolution}
-            onValueChange={(value: string) => {
+            onValueChange={async (value: string) => {
               setResolution(value);
-              handleSave();
+              await window.electronAPI.saveSettings({
+                interval,
+                resolution: value,
+                framerate,
+              });
             }}
           >
             <SelectTrigger className="w-full">
@@ -92,9 +94,14 @@ export default function Settings() {
           </label>
           <Select
             value={framerate.toString()}
-            onValueChange={(value: string) => {
-              setFramerate(Number(value));
-              handleSave();
+            onValueChange={async (value: string) => {
+              const newFramerate = Number(value);
+              setFramerate(newFramerate);
+              await window.electronAPI.saveSettings({
+                interval,
+                resolution,
+                framerate: newFramerate,
+              });
             }}
           >
             <SelectTrigger className="w-full">

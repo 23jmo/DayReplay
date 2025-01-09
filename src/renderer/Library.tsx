@@ -1,53 +1,17 @@
 import React from 'react'
+import { DayEntry } from '../shared/types'
+import LibrarySidebar from './components/library-sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
-class DayEntry{
+const loadDays = async (): Promise<DayEntry[]> => {
 
-  startDate: string;
-  framerate: number;
-  resolution: string;
-  interval: number;
-  duration: number;
-  numShots: number;
-  video: string;
-  timeline: string;
-  productivity: number;
-  thumbnail: string;
-  tags: string[];
+  console.log("Loading days");
 
-  constructor(startDate: string, framerate: number, resolution: string, interval: number, duration: number, numShots: number, video: string, timeline: string, productivity: number, thumbnail: string, tags: string[]) {
-    this.startDate = startDate;
-    this.framerate = framerate;
-    this.resolution = resolution;
-    this.interval = interval;
-    this.duration = duration;
-    this.numShots = numShots;
-    this.video = video;
-    this.timeline = timeline;
-    this.productivity = productivity;
-    this.thumbnail = thumbnail;
-    this.tags = tags;
-  }
+  const days = await window.electronAPI.getDays();
 
-  toJSON() {
-    return {
-      startDate: this.startDate,
-      framerate: this.framerate,
-      resolution: this.resolution,
-      interval: this.interval,
-      duration: this.duration,
-      numShots: this.numShots,
-      video: this.video,
-      timeline: this.timeline,
-      productivity: this.productivity,
-      thumbnail: this.thumbnail,
-      tags: this.tags,
-    };
-  }
+  console.log("Days loaded", days);
 
-}
-
-
-const loadDays = async () => {
+  return days;
 
 }
 
@@ -71,6 +35,46 @@ the days should be stored like this:
 
 */
 
+const dayButton = (day: DayEntry) => {
+  return (
+
+    <div className="bg-background p-4 rounded-md hover:bg-muted-foreground hover:text-foreground transition-all duration-300">
+
+
+    </div>
+    // <div className="bg-background p-4 rounded-md shadow-sm border-black border-2 hover:bg-muted-foreground hover:text-foreground transition-all duration-300">
+    //   <p>{day.startDate}</p>
+    //   <p>{day.fps} FPS</p>
+    //   <p>{day.resolution}</p>
+    //   <p>{day.interval}s interval</p>
+    //   <p>{day.duration}s duration</p>
+    //   <p>{day.numShots} shots</p>
+    // </div>
+  )
+}
+
+// const LibrarySidebar = () => {
+//   const [days, setDays] = React.useState<DayEntry[]>([]);
+
+//   React.useEffect(() => {
+//     loadDays().then((loadedDays) => {
+//       console.log("Days loaded in sidebar", loadedDays);
+//       if (loadedDays) {
+//         setDays(loadedDays);
+//       }
+//     });
+//   }, []);
+
+//   return (
+//     <div>
+//       {days?.map((day) => {
+//         console.log("Rendering day:", day);
+//         return dayButton(day);
+//       })}
+//     </div>
+//   )
+// }
+
 const Library = () => {
 
 
@@ -78,7 +82,10 @@ const Library = () => {
 
   return (
     <div>
-      <p>Library</p>
+      Library
+      <LibrarySidebar />
+
+
     </div>
 
     // Here's what I need:

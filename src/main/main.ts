@@ -19,7 +19,7 @@ import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
 import { getRecordingStats, resolveHtmlPath } from './util';
-import store from './store';
+import { daysStore, settingsStore } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
 
@@ -33,6 +33,13 @@ class AppUpdater {
 
 // const mainWindow: BrowserWindow | null = null;
 
+ipcMain.handle('days:get', async () => {
+  // go through all the days stored in some local file path or maybe in electron store
+  //@ts-ignore
+  const days = daysStore.get('days');
+  return days;
+});
+
 ipcMain.on('ipc-example', async (event, arg) => {
   const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
   console.log(msgTemplate(arg));
@@ -41,11 +48,11 @@ ipcMain.on('ipc-example', async (event, arg) => {
 
 ipcMain.handle('settings:save', async (_, settings: Settings) => {
   //@ts-ignore
-  store.set('interval', settings.interval);
+  settingsStore.set('interval', settings.interval);
   //@ts-ignore
-  store.set('resolution', settings.resolution);
+  settingsStore.set('resolution', settings.resolution);
   //@ts-ignore
-  store.set('framerate', settings.framerate);
+  settingsStore.set('framerate', settings.framerate);
   return true;
 });
 
@@ -57,11 +64,11 @@ ipcMain.handle('screenshots-taken', () => {
 ipcMain.handle('settings:get', async () => {
   return {
     //@ts-ignore
-    interval: store.get('interval'),
+    interval: settingsStore.get('interval'),
     //@ts-ignore
-    resolution: store.get('resolution'),
+    resolution: settingsStore.get('resolution'),
     //@ts-ignore
-    framerate: store.get('framerate'),
+    framerate: settingsStore.get('framerate'),
   } as Settings;
 });
 

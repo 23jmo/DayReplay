@@ -17,6 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
 } from "@/components/ui/sidebar"
 
 // Menu items.
@@ -42,6 +43,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar>
+
         <div className="app-region-drag h-10 right-0 top-0 left-0">
 
         </div>
@@ -64,6 +66,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
+      
       <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>

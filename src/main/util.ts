@@ -11,6 +11,8 @@ import { systemPreferences } from 'electron';
 import { writeFile } from 'fs/promises';
 
 import {TrayIcons} from './assets'
+import { DayEntry } from '../shared/types';
+import { daysStore } from './store';
 
 // Configure logging
 log.transports.file.level = 'debug';
@@ -73,11 +75,15 @@ try {
   throw error;
 }
 
+/* Defining Variables */
+
 let screenshotCount = 0;
 let recordingInterval: ReturnType<typeof setInterval> | null = null;
 let framerate: number;
 let resolution: string;
 let intervalInSeconds: number;
+let startDate = Date.now(); //timestamp of when the recording started
+
 
 const tempDir = path.join(app.getPath('temp'), 'DayReplay');
 
@@ -88,6 +94,7 @@ function clearTempDir() {
     fs.unlinkSync(path.join(tempDir, file));
   });
 }
+
 
 export function resolveHtmlPath(htmlFileName: string) {
   if (process.env.NODE_ENV === 'development') {
@@ -206,6 +213,8 @@ export function startRecording(interval: number, res: string, tray: Tray) {
     return false;
   }
 
+
+  startDate = Date.now();
   resolution = res;
   intervalInSeconds = interval;
   resetRecordingStats();
@@ -308,7 +317,7 @@ export async function exportRecording(tray: Tray, fps: number) {
   const { filePath, canceled } = await dialog.showSaveDialog({
     title: 'Export Replay',
     buttonLabel: 'Save Replay',
-    defaultPath: `DayReplay-${Date.now()}.mp4`,
+    defaultPath: `DayReplay-${startDate}.mp4`,
     filters: [
       {
         name: 'MP4 Videos',
@@ -365,6 +374,41 @@ export async function exportRecording(tray: Tray, fps: number) {
       .output(filePath)
       .on('end', () => {
         log.info('Timelapse export completed:', filePath);
+
+        const localDayDir = path.join(app.getPath('appData'), "DayReplays");
+        // Create the directory if it doesn't exist
+        if (!fs.existsSync(localDayDir)) {
+          fs.mkdirSync(localDayDir, { recursive: true });
+        }
+
+        const localFilePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
+        //save a local copy to the days folder
+        fs.copyFileSync(filePath, localFilePath);
+        log.info('Local copy saved to:', localFilePath);
+
+        //edit the json
+
+        const dayEntry = {
+          startDate: startDate.toString(),
+          fps: fps,
+          resolution: resolution,
+          interval: intervalInSeconds,
+          duration: screenshotCount * intervalInSeconds,
+          numShots: screenshotCount,
+          videoPath: localFilePath,
+          timelinePath: '',
+          productivity: 0,
+          thumbnailPath: '',
+          tags: []
+        };
+
+        // Get current days and append new entry
+        // @ts-ignore - electron-store types are not properly exposed
+        const currentDays = daysStore.get('days') ?? [];
+        // @ts-ignore - electron-store types are not properly exposed
+        daysStore.set('days', [...currentDays, dayEntry]);
+        log.info('Days updated in store to be:', daysStore.get('days'));
+
         dialog.showMessageBox({
           type: 'info',
           message: 'Timelapse export completed',

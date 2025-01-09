@@ -18,7 +18,7 @@ import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
 import { resolveHtmlPath, startRecording, pauseRecording, exportRecording, resumeRecording, getRecordingStats } from './util';
 
-import store from './store';
+import { settingsStore } from './store';
 import { TrayIcons, MenuIcons } from './assets';
 
 
@@ -128,9 +128,9 @@ export default class MenuBuilder {
   buildMenu(): Menu {
     const settings = {
       //@ts-ignore
-      interval: store.get('interval'),
+      interval: settingsStore.get('interval'),
       //@ts-ignore
-      resolution: store.get('resolution'),
+      resolution: settingsStore.get('resolution'),
     };
 
     const progress = isRecording ? {

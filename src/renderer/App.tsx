@@ -17,6 +17,7 @@ import Library from './Library';
 import { AppSidebar } from './components/Sidebar';
 import { Title } from '@radix-ui/react-dialog';
 import Settings from './Settings';
+import RenderLayout from './render-layout';
 
 declare global {
   interface Window {
@@ -53,14 +54,21 @@ export default function App() {
 
       <SidebarProvider>
       <AppSidebar />
-      <Router>
 
-          <Routes>
-            <Route path="/" element={<Settings />} />
-            <Route path="/frameratePicker" element={<FrameratePicker />} />
-            <Route path="/library" element={<Library />} />
-          </Routes>
-      </Router>
+      <main className="w-full">
+        <RenderLayout>
+          <Router>
+              <Routes>
+                <Route path="/" element={<Settings />} />
+                <Route path="/frameratePicker" element={<FrameratePicker />} />
+                <Route path="/library" element={<Library />} />
+              </Routes>
+          </Router>
+        </RenderLayout>
+        <div className="absolute bottom-4 left-4">
+          <SidebarTrigger />
+        </div>
+      </main>
       </SidebarProvider>
     </div>
     </>
