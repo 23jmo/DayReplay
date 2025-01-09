@@ -223,6 +223,15 @@ app
         index: resolveHtmlPath('index.html'),
         preloadWindow: true,
         showDockIcon: false,
+        browserWindow: {
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: app.isPackaged
+              ? path.join(__dirname, 'preload.js')
+              : path.join(__dirname, '../../.erb/dll/preload.js'),
+          }
+        }
       });
 
       mb.on('ready', () => {

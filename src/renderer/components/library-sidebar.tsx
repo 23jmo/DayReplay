@@ -2,6 +2,7 @@ import * as React from "react"
 import { DayEntry } from "@/src/shared/types"
 import { formatTimestampToArray } from "@/src/shared/utils"
 import { useCallback, useEffect, useState } from "react"
+import DayEntryButton from "./day-entry-button"
 
 interface Entry {
   day: DayEntry
@@ -220,38 +221,29 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
               <div className="space-y-1 px-2">
                 {group.entries.map((entry) => {
 
-                  const [month, day, time, dayOfWeek] = formatTimestampToArray(entry.day.startDate);
+                  const [month, day, year, time, dayOfWeek] = formatTimestampToArray(entry.day.startDate);
                   const today = new Date();
+
                   const entryDate = new Date(parseInt(entry.day.startDate));
+
+
+                  const isToday = today.getDate() === entryDate.getDate() && today.getMonth() === entryDate.getMonth() && today.getFullYear() === entryDate.getFullYear();
                   const diffDays = Math.floor((today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
 
-                  const displayTitle = diffDays === 0 ? `Today ${time}` :
+                  const displayTitle = isToday ? `Today ${time}` :
                     diffDays <= 7 ? `${dayOfWeek} ${time}` :
                     diffDays <= 30 ? `${new Date(parseInt(entry.day.startDate)).toLocaleString('default', { month: 'long' })} ${day} ${time}` :
-                    `${month}/${day} ${time}`;
+                    diffDays <= 365 ? `${month}/${day} ${time}` : `${month}/${day} ${year} ${time} `;
+
+
                   return (
-                    <button
-                      key={entry.id}
-                      className={`w-full rounded-md p-2 text-left transition-colors duration-200 ${
-                        selectedEntryId === entry.id.toString()
-                          ? "bg-blue-100 text-blue-900"
-                          : "hover:bg-gray-100"
-                      }`}
-                      onClick={() => handleEntryClick(entry)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">
-                          {displayTitle}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {formatTimestampToArray(entry.day.startDate)[1]}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 truncate">
-                        {entry.day.duration}s, {entry.day.numShots} shots
-                      </p>
-                    </button>
-                    )
+                    <DayEntryButton
+                      entry={entry}
+                      selectedEntryId={selectedEntryId || ""}
+                      handleEntryClick={handleEntryClick}
+                      displayTitle={displayTitle}
+                    />
+                  )
                 })}
               </div>
             )}

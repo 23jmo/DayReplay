@@ -240,7 +240,9 @@ export default class MenuBuilder {
             webPreferences: {
               nodeIntegration: false,
               contextIsolation: true,
-              preload: path.join(__dirname, '../../.erb/dll/preload.js'),
+              preload: app.isPackaged
+                ? path.join(__dirname, 'preload.js')
+                : path.join(__dirname, '../../.erb/dll/preload.js'),
             },
           });
 
