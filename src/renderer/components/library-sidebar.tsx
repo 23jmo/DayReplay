@@ -1,13 +1,9 @@
 import * as React from "react"
 import { DayEntry } from "@/src/shared/types"
-import { formatTimestampToArray } from "@/src/shared/utils"
+import { formatDisplayTitle } from "@/src/shared/utils"
 import { useCallback, useEffect, useState } from "react"
 import DayEntryButton from "./day-entry-button"
-
-interface Entry {
-  day: DayEntry
-  id: number
-}
+import type { Entry } from '../../shared/types';
 
 interface TimeGroup {
   label: string
@@ -192,13 +188,13 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
   }, [])
 
   return (
-    <aside className="w-80 border-r bg-white">
-      <nav className="h-full">
+    <aside className="w-80 border-r bg-white flex flex-col">
+      <nav className="flex-1 overflow-y-auto">
         {groups.map((group, index) => (
           <div key={group.label}>
             <button
               onClick={() => toggleGroup(index)}
-              className="flex w-full items-center justify-between p-2 hover:bg-gray-100"
+              className="flex w-full items-center justify-between p-2 hover:bg-gray-100 sticky top-0 bg-white z-10"
             >
               <span className="text-sm font-medium text-gray-500">{group.label}</span>
               <svg
@@ -219,32 +215,15 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
             </button>
             {group.isOpen && (
               <div className="space-y-1 px-2">
-                {group.entries.map((entry) => {
-
-                  const [month, day, year, time, dayOfWeek] = formatTimestampToArray(entry.day.startDate);
-                  const today = new Date();
-
-                  const entryDate = new Date(parseInt(entry.day.startDate));
-
-
-                  const isToday = today.getDate() === entryDate.getDate() && today.getMonth() === entryDate.getMonth() && today.getFullYear() === entryDate.getFullYear();
-                  const diffDays = Math.floor((today.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
-
-                  const displayTitle = isToday ? `Today ${time}` :
-                    diffDays <= 7 ? `${dayOfWeek} ${time}` :
-                    diffDays <= 30 ? `${new Date(parseInt(entry.day.startDate)).toLocaleString('default', { month: 'long' })} ${day} ${time}` :
-                    diffDays <= 365 ? `${month}/${day} ${time}` : `${month}/${day} ${year} ${time} `;
-
-
-                  return (
-                    <DayEntryButton
-                      entry={entry}
-                      selectedEntryId={selectedEntryId || ""}
-                      handleEntryClick={handleEntryClick}
-                      displayTitle={displayTitle}
-                    />
-                  )
-                })}
+                {group.entries.map((entry) => (
+                  <DayEntryButton
+                    key={entry.id}
+                    entry={entry}
+                    selectedEntryId={selectedEntryId || ""}
+                    handleEntryClick={handleEntryClick}
+                    displayTitle={formatDisplayTitle(entry.day.startDate)}
+                  />
+                ))}
               </div>
             )}
           </div>

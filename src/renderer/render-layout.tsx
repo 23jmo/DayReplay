@@ -1,12 +1,16 @@
 import React from 'react'
-
 import Navbar from './components/Navbar'
 
-const RenderLayout = ({children} : {children: React.ReactNode}) => {
+interface RenderLayoutProps {
+  children: React.ReactNode;
+  noPadding?: boolean;
+}
+
+const RenderLayout = ({ children, noPadding }: RenderLayoutProps) => {
   return (
     <div className="w-full overflow-hidden">
       <Navbar />
-      <div className="container px-2 pb-8 ">
+      <div className={noPadding ? "" : "container px-2 pb-8"}>
         {children}
       </div>
     </div>

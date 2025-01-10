@@ -18,12 +18,12 @@ const Library = () => {
   }, [])
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-[calc(100vh-theme(spacing.14))]">
       <LibrarySidebar
         onDaySelect={handleDaySelect}
         selectedEntryId={selectedEntryId}
       />
-      <div className="flex-1 p-4">
+      <main className="flex-1 relative">
         {selectedDay ? (
           <DayView day={selectedDay} />
         ) : (
@@ -31,7 +31,7 @@ const Library = () => {
             Select a day to view its details
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }

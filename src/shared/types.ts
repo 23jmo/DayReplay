@@ -10,4 +10,9 @@ export type DayEntry = {
   productivity: number;
   thumbnailPath: string;
   tags: string[];
+};
+
+export interface Entry {
+  day: DayEntry;
+  id: number;
 }

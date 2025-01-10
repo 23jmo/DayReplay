@@ -56,15 +56,13 @@ export default function App() {
       <AppSidebar />
 
       <main className="w-full">
-        <RenderLayout>
-          <Router>
-              <Routes>
-                <Route path="/" element={<Settings />} />
-                <Route path="/frameratePicker" element={<FrameratePicker />} />
-                <Route path="/library" element={<Library />} />
-              </Routes>
-          </Router>
-        </RenderLayout>
+        <Router>
+          <Routes>
+            <Route path="/" element={<RenderLayout><Settings /></RenderLayout>} />
+            <Route path="/frameratePicker" element={<RenderLayout><FrameratePicker /></RenderLayout>} />
+            <Route path="/library" element={<RenderLayout noPadding><Library /></RenderLayout>} />
+          </Routes>
+        </Router>
         <div className="absolute bottom-4 left-4">
           <SidebarTrigger />
         </div>
