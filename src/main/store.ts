@@ -7,6 +7,10 @@ export interface Settings {
   framerate: number;
 }
 
+export interface CustomPrompt {
+  customPrompt: string;
+}
+
 const settingsSchema = {
   interval: {
     type: 'number',
@@ -19,6 +23,13 @@ const settingsSchema = {
   framerate: {
     type: 'number',
     default: 30,
+  },
+} as const;
+
+const customPromptSchema = {
+  customPrompt: {
+    type: 'string',
+    default: '',
   },
 } as const;
 
@@ -59,4 +70,9 @@ const daysStore = new Store<{days: DayEntry[]}>({
   name: 'days',
 });
 
-export { settingsStore, daysStore };
+const customPromptStore = new Store<{customPrompt: string}>({
+  schema: customPromptSchema,
+  name: 'customPrompt',
+});
+
+export { settingsStore, daysStore, customPromptStore };
