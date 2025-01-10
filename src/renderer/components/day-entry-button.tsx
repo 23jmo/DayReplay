@@ -6,7 +6,7 @@ interface DayEntryButtonProps {
   entry: Entry;
   selectedEntryId: string;
   handleEntryClick: (entry: Entry) => void;
-  displayTitle: string;
+  displayTitle: { display: string, timeRange: string };
 }
 
 const DayEntryButton = ({ entry, selectedEntryId, handleEntryClick, displayTitle }: DayEntryButtonProps) => {
@@ -24,11 +24,11 @@ const DayEntryButton = ({ entry, selectedEntryId, handleEntryClick, displayTitle
         <div className="">
           <div className="flex items-center justify-between">
             <span className="font-medium">
-              {displayTitle}
+              {displayTitle.display}
             </span>
           </div>
           <p className="text-xs text-gray-500 truncate">
-            {formatDuration(entry.day.duration)}
+            {displayTitle.timeRange}, ({formatDuration(entry.day.duration)})
           </p>
         </div>
         <div className="relative w-8 h-8">

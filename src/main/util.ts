@@ -5,13 +5,18 @@ import path from 'path';
 import { Menubar } from 'menubar';
 import fs from 'fs';
 import log from 'electron-log';
-import { dialog, app, Tray, desktopCapturer } from 'electron';
+import { dialog, app, Tray, desktopCapturer, screen, BrowserWindow } from 'electron';
 import ffmpeg from 'fluent-ffmpeg';
 import { systemPreferences } from 'electron';
 import { writeFile } from 'fs/promises';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { activeWindow } from 'get-windows';
+
+const execAsync = promisify(exec);
 
 import {TrayIcons} from './assets'
-import { DayEntry } from '../shared/types';
+import { DayEntry, AppUsageData } from '../shared/types';
 import { daysStore } from './store';
 
 // Configure logging
@@ -79,11 +84,83 @@ try {
 
 let screenshotCount = 0;
 let recordingInterval: ReturnType<typeof setInterval> | null = null;
+let appTrackingInterval: ReturnType<typeof setInterval> | null = null;
 let framerate: number;
 let resolution: string;
 let intervalInSeconds: number;
 let startDate = Date.now(); //timestamp of when the recording started
 
+// App tracking variables
+let currentApp: AppUsageData | null = null;
+let appUsageData: AppUsageData[] = [];
+
+// Function to get the current active window info
+async function getActiveWindowInfo(): Promise<AppUsageData | null> {
+  try {
+    const activeWinInfo = await activeWindow({
+      screenRecordingPermission: true,
+      accessibilityPermission: true
+    });
+
+    if (!activeWinInfo) return null;
+
+    return {
+      appName: activeWinInfo.owner.name,
+      title: activeWinInfo.title,
+      url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
+      owner: {
+        name: activeWinInfo.owner.name,
+        path: activeWinInfo.owner.path,
+      },
+      startTime: Date.now(),
+      endTime: Date.now(), // Will be updated when app changes
+      duration: 0, // Will be calculated when app changes
+    };
+  } catch (error) {
+    log.error('Error getting active window:', error);
+    return null;
+  }
+}
+
+// Function to track app changes
+async function trackAppChange() {
+  try {
+    const newAppInfo = await getActiveWindowInfo();
+    const now = Date.now();
+
+    if (!newAppInfo) return;
+
+    if (currentApp && (currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title)) {
+      // App or window has changed, log the previous app's duration
+      const duration = now - currentApp.startTime;
+      currentApp.endTime = now;
+      currentApp.duration = duration;
+      appUsageData.push(currentApp);
+      log.debug(`App change: ${currentApp.appName} (${currentApp.title}) -> ${newAppInfo.appName} (${newAppInfo.title}), duration: ${duration}ms`);
+    }
+
+    if (!currentApp || currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title) {
+      currentApp = newAppInfo;
+    }
+  } catch (error) {
+    log.error('Error tracking app change:', error);
+  }
+}
+
+// Reset app tracking data
+function resetAppTracking() {
+  if (appTrackingInterval) {
+    clearInterval(appTrackingInterval);
+    appTrackingInterval = null;
+  }
+  currentApp = null;
+  appUsageData = [];
+}
+
+// Get current app tracking data
+export function getAppTrackingData() {
+  return appUsageData;
+}
 
 const tempDir = path.join(app.getPath('temp'), 'DayReplay');
 
@@ -226,17 +303,18 @@ export function resetRecordingStats() {
   screenshotCount = 0;
 }
 
-export function startRecording(interval: number, res: string, tray: Tray) {
+// Extend the existing startRecording function
+export function startRecording(interval: number, res: string, tray: Tray): boolean {
   if (recordingInterval) {
     log.info('Recording already in progress');
     return false;
   }
 
-
   startDate = Date.now();
   resolution = res;
   intervalInSeconds = interval;
   resetRecordingStats();
+  resetAppTracking(); // Reset app tracking when starting new recording
 
   // set active icon
   tray.setImage(TrayIcons.active);
@@ -260,6 +338,9 @@ export function startRecording(interval: number, res: string, tray: Tray) {
 
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 3;
+
+  // Start app tracking interval (check every second)
+  appTrackingInterval = setInterval(trackAppChange, 1000);
 
   recordingInterval = setInterval(async () => {
     try {
@@ -315,6 +396,21 @@ export function pauseRecording(tray: Tray) {
     clearInterval(recordingInterval);
     log.info('Recording paused. Total screenshots taken:', screenshotCount);
     recordingInterval = null;
+
+    // Final app tracking update before pausing
+    if (currentApp) {
+      const now = Date.now();
+      currentApp.endTime = now;
+      currentApp.duration = now - currentApp.startTime;
+      appUsageData.push(currentApp);
+      currentApp = null;
+    }
+
+    // Clear app tracking interval
+    if (appTrackingInterval) {
+      clearInterval(appTrackingInterval);
+      appTrackingInterval = null;
+    }
 
     // set default icon
     tray.setImage(TrayIcons.default);
@@ -406,7 +502,6 @@ export async function exportRecording(tray: Tray, fps: number) {
         log.info('Local copy saved to:', localFilePath);
 
         //edit the json
-
         const dayEntry = {
           startDate: startDate.toString(),
           fps: fps,
@@ -418,7 +513,8 @@ export async function exportRecording(tray: Tray, fps: number) {
           timelinePath: '',
           productivity: 0,
           thumbnailPath: '',
-          tags: []
+          tags: [],
+          appUsage: appUsageData, // Add app usage data to the entry
         };
 
         // Get current days and append new entry

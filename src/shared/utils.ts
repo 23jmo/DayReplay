@@ -1,5 +1,7 @@
-export function formatTimestampToArray(timestamp: string | number) {
-  const ts = Number(timestamp);
+import { AppUsageData } from './types';
+
+export function formatTimestampToArray(timestamp: string | number): [string, string, number, string, string] {
+  const ts = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp;
   const date = new Date(ts);
 
   const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
@@ -36,7 +38,7 @@ export function formatDuration(seconds: number): string {
   return `0m ${seconds}s`;
 }
 
-export function formatDisplayTitle(timestamp: string | number): string {
+export function formatDisplayTitle(timestamp: string | number, duration: number = 0): { display: string, timeRange: string } {
   const [month, day, year, time, dayOfWeek] = formatTimestampToArray(timestamp);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -44,6 +46,15 @@ export function formatDisplayTitle(timestamp: string | number): string {
   const entryDate = new Date(Number(timestamp));
   const entryDay = new Date(entryDate);
   entryDay.setHours(0, 0, 0, 0);
+
+  // Calculate end time
+  const endDate = new Date(Number(timestamp) + duration * 1000);
+  const endHours = endDate.getHours() % 12 || 12;
+  const endMinutes = String(endDate.getMinutes()).padStart(2, '0');
+  const endAmPm = endDate.getHours() >= 12 ? 'PM' : 'AM';
+  const endTime = `${endHours}:${endMinutes} ${endAmPm}`;
+
+  const timeRange = `${time} - ${endTime}`;
 
   const isToday = today.getTime() === entryDay.getTime();
 
@@ -54,10 +65,33 @@ export function formatDisplayTitle(timestamp: string | number): string {
 
   const diffDays = Math.floor((today.getTime() - entryDay.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (isToday) return `Today ${time}`;
-  if (isYesterday) return `Yesterday ${time}`;
-  if (diffDays <= 7) return `${dayOfWeek} ${time}`;
-  if (diffDays <= 30) return `${entryDate.toLocaleString('default', { month: 'long' })} ${day} ${time}`;
-  if (diffDays <= 365) return `${month}/${day} ${time}`;
-  return `${month}/${day} ${year} ${time}`;
+  let display: string;
+  if (isToday) display = 'Today';
+  else if (isYesterday) display = 'Yesterday';
+  else if (diffDays <= 7) display = dayOfWeek;
+  else if (diffDays <= 30) display = `${entryDate.toLocaleString('default', { month: 'long' })} ${day}`;
+  else if (diffDays <= 365) display = `${month}/${day}`;
+  else display = `${month}/${day} ${year}`;
+
+  return { display, timeRange };
+}
+
+export function aggregateAppUsage(appUsageData: AppUsageData[] | undefined) {
+  if (!appUsageData) return [];
+
+  const appTotals = new Map<string, number>();
+
+  // Sum up durations for each app
+  for (const usage of appUsageData) {
+    const currentTotal = appTotals.get(usage.appName) || 0;
+    appTotals.set(usage.appName, currentTotal + usage.duration);
+  }
+
+  // Convert to array and sort by duration (descending)
+  return Array.from(appTotals.entries())
+    .map(([appName, duration]) => ({
+      appName,
+      duration,
+    }))
+    .sort((a, b) => b.duration - a.duration);
 }

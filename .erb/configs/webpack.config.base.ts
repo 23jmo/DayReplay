@@ -10,8 +10,10 @@ import { dependencies as externals } from '../../release/app/package.json';
 const configuration: webpack.Configuration = {
   externals: [
     ...Object.keys(externals || {}).filter(
-      dep => !['ffmpeg-static'].includes(dep)
-    )
+      dep => !['ffmpeg-static', 'get-windows'].includes(dep)
+    ),
+    'node-gyp',
+    '@mapbox/node-pre-gyp'
   ],
 
   stats: 'errors-only',
@@ -31,6 +33,12 @@ const configuration: webpack.Configuration = {
           },
         },
       },
+      {
+        test: /\.m?js/,
+        resolve: {
+          fullySpecified: false,
+        },
+      },
     ],
   },
 
@@ -42,9 +50,13 @@ const configuration: webpack.Configuration = {
   },
 
   resolve: {
-    extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
+    extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.mjs'],
     modules: [webpackPaths.srcPath, 'node_modules'],
     plugins: [new TsconfigPathsPlugins()],
+  },
+
+  experiments: {
+    topLevelAwait: true,
   },
 
   plugins: [

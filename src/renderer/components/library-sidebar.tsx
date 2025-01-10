@@ -221,7 +221,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
                     entry={entry}
                     selectedEntryId={selectedEntryId || ""}
                     handleEntryClick={handleEntryClick}
-                    displayTitle={formatDisplayTitle(entry.day.startDate)}
+                    displayTitle={formatDisplayTitle(entry.day.startDate, entry.day.duration)}
                   />
                 ))}
               </div>
