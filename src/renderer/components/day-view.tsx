@@ -1,8 +1,9 @@
 import { DayEntry } from '@/src/shared/types'
 import { formatDuration } from '@/src/shared/utils'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import ReactPlayer from 'react-player'
 import Timeline from './timeline'
+import { Tag } from './tag'
 
 interface DayViewProps {
   day: DayEntry
@@ -12,6 +13,7 @@ interface DayViewProps {
 const DayView = ({ day, children }: DayViewProps) => {
   const [videoUrl, setVideoUrl] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const playerRef = useRef<ReactPlayer>(null)
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -37,6 +39,17 @@ const DayView = ({ day, children }: DayViewProps) => {
     ? day.appUsage[day.appUsage.length - 1].endTime - day.appUsage[0].startTime
     : 0;
 
+  const handleSeek = (timestamp: number) => {
+    if (playerRef.current && day.appUsage?.length) {
+      // Convert timestamp to seconds relative to video start with millisecond precision
+      const startTime = day.appUsage[0].startTime;
+      const totalDuration = day.appUsage[day.appUsage.length - 1].endTime - startTime;
+      const seekTime = (timestamp - startTime) / totalDuration;
+
+      playerRef.current.seekTo(seekTime, 'fraction');
+    }
+  };
+
   return (
     <div className="absolute inset-0 overflow-y-auto">
       <div className="p-6">
@@ -49,9 +62,11 @@ const DayView = ({ day, children }: DayViewProps) => {
               day: 'numeric'
             })}
           </h1>
-          <div className="text-sm text-gray-500">
-            {day.fps} FPS · {day.resolution} · {day.interval}s interval
-          </div>
+        </div>
+        <div id="descriptors" className="flex flex-wrap gap-1 mb-4">
+            <Tag text={`${day.fps} FPS`} />
+            <Tag text={`${day.resolution}`} />
+            <Tag text={`${day.interval}s Interval`} />
         </div>
 
         <div className="relative aspect-video bg-black rounded-lg overflow-hidden mb-6">
@@ -61,6 +76,7 @@ const DayView = ({ day, children }: DayViewProps) => {
             </div>
           ) : videoUrl ? (
             <ReactPlayer
+              ref={playerRef}
               url={videoUrl}
               controls={true}
               width="100%"
@@ -82,10 +98,9 @@ const DayView = ({ day, children }: DayViewProps) => {
           <div className="space-y-6">
 
               <h2 className="text-lg font-semibold mb-4">Your Timeline</h2>
-              <Timeline appUsage={day.appUsage} totalDuration={totalDuration} />
+              <Timeline appUsage={day.appUsage} totalDuration={totalDuration} onSeek={handleSeek} />
 
-
-            <div className="p-6 bg-white rounded-lg shadow-sm">
+            {/* <div className="p-6 bg-white rounded-lg shadow-sm">
               <h2 className="text-lg font-semibold mb-4">App Details</h2>
               <div className="space-y-3">
                 {day.appUsage.map((usage, index) => (
@@ -105,7 +120,7 @@ const DayView = ({ day, children }: DayViewProps) => {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> */}
           </div>
         )}
 
