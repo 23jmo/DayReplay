@@ -58,7 +58,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
           <div
             onClick={handleClick}
             className={cn(
-              "absolute h-full cursor-pointer hover:brightness-90 transition-all",
+              "absolute h-full cursor-pointer hover:brightness-150 hover:scale-110 transition-all",
               isFirst && "rounded-l-full",
               isLast && "rounded-r-full",
               !isFirst && !isLast && "rounded-none"
