@@ -4,6 +4,15 @@ import React, { useEffect, useState, useRef } from 'react'
 import ReactPlayer from 'react-player'
 import Timeline from './timeline'
 import { Tag } from './tag'
+import { MoreHorizontal, Share2 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 interface DayViewProps {
   day: DayEntry
@@ -62,6 +71,23 @@ const DayView = ({ day, children }: DayViewProps) => {
               day: 'numeric'
             })}
           </h1>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-5 w-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={async () => {
+                if (day.videoPath) {
+                  await window.electronAPI.shareFile(day.videoPath);
+                }
+              }}>
+                <Share2 className="mr-2 h-4 w-4" />
+                <span>Share Timelapse</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div id="descriptors" className="flex flex-wrap gap-1 mb-4">
             <Tag text={`${day.fps} FPS`} />

@@ -16,6 +16,10 @@ interface ElectronAPI {
   getScreenshotCount: () => Promise<number>;
   getDays: () => Promise<DayEntry[]>;
   getVideoUrl: (filePath: string) => Promise<string>;
+  getCustomPrompt: () => Promise<string>;
+  setCustomPrompt: (prompt: string) => Promise<boolean>;
+  showInFinder: (filePath: string) => Promise<void>;
+  shareFile: (filePath: string) => Promise<void>;
 }
 
 declare global {
@@ -38,6 +42,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
   getDays: () => ipcRenderer.invoke('days:get'),
   getVideoUrl: (filePath: string) => ipcRenderer.invoke('get-video-url', filePath),
+  getCustomPrompt: () => ipcRenderer.invoke('custom-prompt:get'),
+  setCustomPrompt: (prompt: string) => ipcRenderer.invoke('custom-prompt:set', prompt),
+  showInFinder: (filePath: string) => ipcRenderer.invoke('show-in-finder', filePath),
+  shareFile: (filePath: string) => ipcRenderer.invoke('share-file', filePath),
 });
 
 contextBridge.exposeInMainWorld('electron', {

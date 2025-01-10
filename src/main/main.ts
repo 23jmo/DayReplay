@@ -11,7 +11,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences, session, protocol } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences, session, protocol, shell } from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
@@ -19,9 +19,10 @@ import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
 import { getRecordingStats, resolveHtmlPath } from './util';
-import { daysStore, settingsStore } from './store';
+import { daysStore, settingsStore, customPromptStore } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
+
 
 class AppUpdater {
   constructor() {
@@ -81,6 +82,44 @@ ipcMain.handle('get-video-url', async (_, filePath) => {
     console.error('Error accessing video file:', error);
     return null;
   }
+});
+
+ipcMain.handle('custom-prompt:get', async () => {
+  //@ts-ignore
+  return customPromptStore.get('prompt');
+});
+
+ipcMain.handle('custom-prompt:set', async (_, prompt: string) => {
+  //@ts-ignore
+  customPromptStore.set('prompt', prompt);
+  return true;
+});
+
+ipcMain.handle('share-file', async (event, filePath: string) => {
+  if (process.platform === 'darwin') {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return;
+
+    // Show the native share sheet
+    await dialog.showMessageBox(window, {
+      type: 'none',
+      message: 'Share',
+      buttons: ['Share'],
+      defaultId: 0,
+      noLink: true
+    });
+
+    // Use NSWorkspace to show the share sheet
+    const { exec } = require('child_process');
+    exec(`osascript -e 'tell application "Finder" to activate' -e 'tell application "System Events" to keystroke "s" using {command down, shift down}'`);
+  } else {
+    // Fallback for non-macOS platforms
+    shell.showItemInFolder(filePath);
+  }
+});
+
+ipcMain.handle('show-in-finder', async (_, filePath: string) => {
+  shell.showItemInFolder(filePath);
 });
 
 if (process.env.NODE_ENV === 'production') {

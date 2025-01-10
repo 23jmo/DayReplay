@@ -8,7 +8,7 @@ export interface Settings {
 }
 
 export interface CustomPrompt {
-  customPrompt: string;
+  prompt: string;
 }
 
 const settingsSchema = {
@@ -70,7 +70,7 @@ const daysStore = new Store<{days: DayEntry[]}>({
   name: 'days',
 });
 
-const customPromptStore = new Store<{customPrompt: string}>({
+const customPromptStore = new Store<CustomPrompt>({
   schema: customPromptSchema,
   name: 'customPrompt',
 });

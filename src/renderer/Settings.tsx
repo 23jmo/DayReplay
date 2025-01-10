@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { getCustomPrompt, setCustomPrompt } from '../shared/custom-prompt';
+import { Button } from '@/components/ui/button';
+import { toast, Toaster } from 'sonner';
+import { ipcRenderer } from 'electron';
 
 export default function Settings() {
   const [interval, setInterval] = useState(5);
@@ -25,6 +30,26 @@ export default function Settings() {
   const intervalOptions = [1, 3, 5, 10, 15, 30];
 
 
+
+  const getPrompt = async () => {
+    return await window.electronAPI.getCustomPrompt()
+  }
+
+  const setPrompt = async (prompt: string) => {
+    await window.electronAPI.setCustomPrompt(prompt)
+    return true
+  }
+
+  const [customPrompt, setCustomPrompt] = useState('')
+
+  useEffect(() => {
+    const loadPrompt = async () => {
+      const prompt = await getPrompt()
+      setCustomPrompt(prompt)
+    }
+    loadPrompt()
+  }, [])
+
   return (
     <>
       <div className="flex-1 flex-col max-w-4xl">
@@ -45,6 +70,7 @@ export default function Settings() {
                 resolution,
                 framerate,
               });
+              toast.success('Screenshot interval updated');
             }}
           >
             <SelectTrigger className="w-full">
@@ -73,6 +99,7 @@ export default function Settings() {
                 resolution: value,
                 framerate,
               });
+              toast.success('Resolution updated');
             }}
           >
             <SelectTrigger className="w-full">
@@ -102,6 +129,7 @@ export default function Settings() {
                 resolution,
                 framerate: newFramerate,
               });
+              toast.success('Framerate updated');
             }}
           >
             <SelectTrigger className="w-full">
@@ -116,8 +144,29 @@ export default function Settings() {
             </SelectContent>
           </Select>
         </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">
+            What's your definition of productivity?
+          </label>
+          <Textarea
+            placeholder="My definition of productivity is..."
+            value={customPrompt}
+            onChange={(e) => {
+              setCustomPrompt(e.target.value)
+            }}
+          />
+          <div className="flex justify-end">
+            <Button variant="default" className="w-32 rounded-xl"
+            onClick={async () => {
+              await setPrompt(customPrompt);
+              toast.success('Productivity definition updated');
+            }}>Save</Button>
+          </div>
+        </div>
       </div>
       </div>
+      <Toaster position="bottom-right" />
     </>
   );
 }
