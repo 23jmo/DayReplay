@@ -1,13 +1,15 @@
 import React from 'react'
 import { AppUsageData } from '@/src/shared/types'
 import TimelineItem from './timeline-item'
+import { TimelineMarkers } from './timeline-markers'
 
 interface TimelineProps {
   appUsage: AppUsageData[]
   totalDuration: number
+  onSeek: (timestamp: number) => void
 }
 
-const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration }) => {
+const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration, onSeek }) => {
   if (!appUsage.length) return null
 
   const startTime = appUsage[0]?.startTime || 0
@@ -40,19 +42,9 @@ const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration }) => {
 
   return (
     <div>
-
       {/* Timeline container */}
       <div className="relative">
-        {/* Grid lines */}
-        <div className="absolute inset-0">
-          {markers.map((marker, i) => (
-            <div
-              key={i}
-              className="absolute top-0 bottom-0 w-px bg-gray-200"
-              style={{ left: `${marker.left}%` }}
-            />
-          ))}
-        </div>
+
 
         {/* Timeline bar */}
         <div className="relative w-full h-4 bg-gray-100 rounded-lg overflow-hidden">
@@ -71,31 +63,13 @@ const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration }) => {
                 left={left}
                 width={width}
                 color={color}
+                onSeek={onSeek}
               />
             )
           })}
         </div>
-
-        {/* Time markers */}
-        <div className="relative w-full h-6 mt-2">
-          {markers.map((marker, i) => (
-            <div
-              key={i}
-              className="absolute text-xs text-gray-600"
-              style={{
-                left: `${marker.left}%`,
-                transform: 'translateX(-50%)'
-              }}
-            >
-              {marker.time.toLocaleTimeString([], {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              })}
-            </div>
-          ))}
-        </div>
       </div>
+      <TimelineMarkers startTime={startTime} endTime={endTime} />
     </div>
   )
 }

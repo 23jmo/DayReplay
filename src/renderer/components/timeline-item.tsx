@@ -16,6 +16,7 @@ interface TimelineItemProps {
   left: number;
   width: number;
   color: string;
+  onSeek: (timestamp: number) => void;
 }
 
 const TimelineItem: React.FC<TimelineItemProps> = ({
@@ -25,15 +26,37 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
   left,
   width,
   color,
+  onSeek,
 }) => {
   const isFirst = index === 0;
   const isLast = index === totalItems - 1;
+
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    // Calculate the exact position within the segment based on click position
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percentageThrough = clickX / rect.width;
+
+    // Calculate the exact timestamp based on click position
+    const timeRange = usage.endTime - usage.startTime;
+    const exactTimestamp = usage.startTime + (timeRange * percentageThrough);
+
+    onSeek(exactTimestamp);
+  };
+
+  const formatTimeWithMs = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString() + '.' +
+           date.getMilliseconds().toString().padStart(3, '0');
+  };
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
+            onClick={handleClick}
             className={cn(
               "absolute h-full cursor-pointer hover:brightness-90 transition-all",
               isFirst && "rounded-l-full",
@@ -48,7 +71,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
           />
         </TooltipTrigger>
         <TooltipContent className="rounded-xl bg-white shadow-lg shadow-black/30 pt-2">
-           <div className="flex">
+          <div className="flex">
             <div
               className="h-2 mt-2 mb-2 w-12 rounded-full"
               style={{ backgroundColor: color }}
@@ -61,7 +84,7 @@ const TimelineItem: React.FC<TimelineItemProps> = ({
             <div className="text-sm text-gray-900 truncate max-w-[200px]">{usage.title}</div>
           )}
           <div className="text-xs text-gray-700 mt-1">
-            {new Date(usage.startTime).toLocaleTimeString()} - {new Date(usage.endTime).toLocaleTimeString()}
+            {formatTimeWithMs(usage.startTime)} - {formatTimeWithMs(usage.endTime)}
           </div>
           <div className="text-sm font-medium mt-1 text-gray-500">
             {formatDuration(Math.floor(usage.duration / 1000))}
