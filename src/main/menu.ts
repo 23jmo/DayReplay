@@ -189,8 +189,7 @@ export default class MenuBuilder {
         click: async () => {
           const pickerWindow = new BrowserWindow({
             width: 350,
-            height: 350,
-            resizable: true,
+            height: 450,
             fullscreenable: false,
             show: false,
             frame: false,
@@ -235,6 +234,8 @@ export default class MenuBuilder {
           this.settingsWindow = new BrowserWindow({
             width: 1024,
             height: 728,
+            minHeight: 480,
+            minWidth: 640,
             frame: false,
             titleBarStyle: 'hidden',
             webPreferences: {

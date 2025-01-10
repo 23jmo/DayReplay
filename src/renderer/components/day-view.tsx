@@ -2,6 +2,7 @@ import { DayEntry } from '@/src/shared/types'
 import { formatDuration } from '@/src/shared/utils'
 import React, { useEffect, useState } from 'react'
 import ReactPlayer from 'react-player'
+import Timeline from './timeline'
 
 interface DayViewProps {
   day: DayEntry
@@ -30,6 +31,11 @@ const DayView = ({ day, children }: DayViewProps) => {
 
     loadVideo();
   }, [day.videoPath]);
+
+  // Calculate total duration for timeline
+  const totalDuration = day.appUsage && day.appUsage.length > 0
+    ? day.appUsage[day.appUsage.length - 1].endTime - day.appUsage[0].startTime
+    : 0;
 
   return (
     <div className="absolute inset-0 overflow-y-auto">
@@ -72,31 +78,15 @@ const DayView = ({ day, children }: DayViewProps) => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div className="p-6 bg-white rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold mb-2">Stats</h2>
-              <div className="space-y-2">
-                <p>Duration: {formatDuration(day.duration)}</p>
-                <p>Screenshots: {day.numShots}</p>
-                <p>Productivity: {(day.productivity * 100).toFixed(1)}%</p>
-              </div>
-            </div>
-            <div className="p-6 bg-white rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold mb-2">Tags</h2>
-              <div className="flex flex-wrap gap-2">
-                {day.tags.map(tag => (
-                  <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+        {day.appUsage && day.appUsage.length > 0 && (
+          <div className="space-y-6">
 
-          {day.appUsage && day.appUsage.length > 0 && (
+              <h2 className="text-lg font-semibold mb-4">Your Timeline</h2>
+              <Timeline appUsage={day.appUsage} totalDuration={totalDuration} />
+
+
             <div className="p-6 bg-white rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold mb-4">App Timeline</h2>
+              <h2 className="text-lg font-semibold mb-4">App Details</h2>
               <div className="space-y-3">
                 {day.appUsage.map((usage, index) => (
                   <div key={index} className="flex items-center justify-between py-2 border-b last:border-0">
@@ -116,7 +106,28 @@ const DayView = ({ day, children }: DayViewProps) => {
                 ))}
               </div>
             </div>
-          )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-6 mt-6">
+          <div className="p-6 bg-white rounded-lg shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Stats</h2>
+            <div className="space-y-2">
+              <p>Duration: {formatDuration(day.duration)}</p>
+              <p>Screenshots: {day.numShots}</p>
+              <p>Productivity: {(day.productivity * 100).toFixed(1)}%</p>
+            </div>
+          </div>
+          <div className="p-6 bg-white rounded-lg shadow-sm">
+            <h2 className="text-lg font-semibold mb-2">Tags</h2>
+            <div className="flex flex-wrap gap-2">
+              {day.tags.map(tag => (
+                <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
         {children}
