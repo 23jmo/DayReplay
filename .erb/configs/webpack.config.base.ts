@@ -10,10 +10,8 @@ import { dependencies as externals } from '../../release/app/package.json';
 const configuration: webpack.Configuration = {
   externals: [
     ...Object.keys(externals || {}).filter(
-      dep => !['ffmpeg-static', 'get-windows'].includes(dep)
+      dep => !['ffmpeg-static', 'get-windows', '@mapbox/node-pre-gyp'].includes(dep)
     ),
-    'node-gyp',
-    '@mapbox/node-pre-gyp'
   ],
 
   stats: 'errors-only',
@@ -39,6 +37,12 @@ const configuration: webpack.Configuration = {
           fullySpecified: false,
         },
       },
+      // Ignore non-JS files in node_modules
+      {
+        test: /\.(html|cs)$/,
+        include: /node_modules/,
+        type: 'asset/resource',
+      },
     ],
   },
 
@@ -53,6 +57,11 @@ const configuration: webpack.Configuration = {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx', '.mjs'],
     modules: [webpackPaths.srcPath, 'node_modules'],
     plugins: [new TsconfigPathsPlugins()],
+    fallback: {
+      "aws-sdk": false,
+      "mock-aws-s3": false,
+      "nock": false,
+    },
   },
 
   experiments: {
