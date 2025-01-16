@@ -16,7 +16,7 @@ import type { Menubar } from 'menubar';
 
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
-import { resolveHtmlPath, startRecording, pauseRecording, exportRecording, resumeRecording, getRecordingStats } from './util';
+import { resolveHtmlPath, startRecording, pauseRecording, exportRecordingWithUserPath, resumeRecording, getRecordingStats, setAutoRecording, getAutoRecording, getRecordingState, setMenuUpdateCallback } from './util';
 
 import { settingsStore } from './store';
 import { TrayIcons, MenuIcons } from './assets';
@@ -26,9 +26,6 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
   submenu?: DarwinMenuItemConstructorOptions[] | Menu;
 }
-
-let isRecording = false;
-let isPaused = false;
 
 export default class MenuBuilder {
 
@@ -42,7 +39,7 @@ export default class MenuBuilder {
 
   private aboutMenuItem: MenuItem;
 
-  private settingsWindow: BrowserWindow | null = null;
+  private browserWindow: BrowserWindow | null = null;
 
   private tray: Tray;
 
@@ -53,6 +50,11 @@ export default class MenuBuilder {
   constructor(tray: Tray) {
 
     this.tray = tray;
+
+    // Register for menu updates when recording state changes
+    setMenuUpdateCallback(() => {
+      this.tray.setContextMenu(this.buildMenu());
+    });
 
     this.aboutMenuItem = new MenuItem({
       label: 'About',
@@ -133,17 +135,10 @@ export default class MenuBuilder {
       resolution: settingsStore.get('resolution'),
     };
 
-    const progress = isRecording ? {
-      label: this.updateStatsLabel,
-      enabled: false,
-    } : {
-      label: 'Not Recording',
-      enabled: false,
-    };
 
     const menuItems: MenuItemConstructorOptions[] = [];
 
-    if (isRecording) {
+    if (getRecordingState().isRecording) {
       menuItems.push({
         label: this.updateStatsLabel,
         enabled: false,
@@ -157,27 +152,28 @@ export default class MenuBuilder {
       },
       { type: 'separator' as const },
       {
-        label: isRecording
-          ? (isPaused ? 'Resume Recording' : 'Stop Recording')
+        label: 'Auto-Record',
+        type: 'checkbox',
+        checked: getAutoRecording(),
+        click: () => {
+          setAutoRecording(!getAutoRecording());
+          this.tray.setContextMenu(this.buildMenu());
+        }
+      },
+      {
+        label: getRecordingState().isRecording
+          ? (getRecordingState().isPaused ? 'Resume Recording' : 'Stop Recording')
           : 'Start Recording',
         click: () => {
-          if (!isRecording) {
-            isRecording = startRecording(
-              settings.interval,
-              settings.resolution,
-              this.tray
-            );
-            isPaused = false;
-            if (isRecording) {
+          if (!getRecordingState().isRecording) {
+            if (startRecording(settings.interval, settings.resolution, this.tray)) {
               this.startStatsUpdate(settings.interval);
             }
-          } else if (isPaused) {
+          } else if (getRecordingState().isPaused) {
             resumeRecording(settings.interval, this.tray);
-            isPaused = false;
             this.startStatsUpdate(settings.interval);
           } else {
             pauseRecording(this.tray);
-            isPaused = true;
             this.pauseStatsUpdate();
           }
           this.tray.setContextMenu(this.buildMenu());
@@ -205,9 +201,7 @@ export default class MenuBuilder {
 
           ipcMain.once('select-framerate', async (_event, fps: number) => {
             pickerWindow.close();
-            await exportRecording(this.tray, fps);
-            isRecording = false;
-            isPaused = false;
+            await exportRecordingWithUserPath(this.tray, fps);
             this.stopStatsUpdate();
             this.tray.setContextMenu(this.buildMenu());
           });
@@ -218,20 +212,53 @@ export default class MenuBuilder {
           });
         },
         accelerator: 'CommandOrControl+E',
-        enabled: isRecording && isPaused,
+        enabled: getRecordingState().isRecording && getRecordingState().isPaused,
       },
       { type: 'separator' as const },
+      {
+        label: 'Open Library',
+        click: () => {
+          if (this.browserWindow) {
+
+            this.browserWindow.focus();
+             this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/library');
+            return;
+          }
+
+          this.browserWindow = new BrowserWindow({
+            width: 1024,
+            height: 728,
+            minHeight: 480,
+            minWidth: 640,
+            frame: false,
+            titleBarStyle: 'hidden',
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              preload: app.isPackaged
+                ? path.join(__dirname, 'preload.js')
+                : path.join(__dirname, '../../.erb/dll/preload.js'),
+            },
+          });
+
+          this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/library');
+
+          this.browserWindow.on('closed', () => {
+            this.browserWindow = null;
+          });
+        }
+      },
       {
         label: 'Settings',
         accelerator: 'CommandOrControl+Shift+.',
         click: () => {
-          if (this.settingsWindow) {
-            this.settingsWindow.focus();
-            this.settingsWindow.webContents.closeDevTools();
+          if (this.browserWindow) {
+            this.browserWindow.focus();
+            this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/')
             return;
           }
 
-          this.settingsWindow = new BrowserWindow({
+          this.browserWindow = new BrowserWindow({
             width: 1024,
             height: 728,
             minHeight: 480,
@@ -248,20 +275,20 @@ export default class MenuBuilder {
           });
 
           // Add error handler
-          this.settingsWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+          this.browserWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
             console.error('Failed to load:', errorDescription);
           });
 
-          this.settingsWindow.loadURL(resolveHtmlPath('index.html'));
+          this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/');
 
-          this.settingsWindow.webContents.on('did-finish-load', () => {
-            if (this.settingsWindow?.webContents.isDevToolsOpened()) {
-              this.settingsWindow.webContents.closeDevTools();
+          this.browserWindow.webContents.on('did-finish-load', () => {
+            if (this.browserWindow?.webContents.isDevToolsOpened()) {
+              this.browserWindow.webContents.closeDevTools();
             }
           });
 
-          this.settingsWindow.on('closed', () => {
-            this.settingsWindow = null;
+          this.browserWindow.on('closed', () => {
+            this.browserWindow = null;
           });
         },
       },

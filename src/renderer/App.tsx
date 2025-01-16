@@ -18,6 +18,7 @@ import { AppSidebar } from './components/Sidebar';
 import { Title } from '@radix-ui/react-dialog';
 import Settings from './Settings';
 import RenderLayout from './render-layout';
+import Home from './Home';
 
 declare global {
   interface Window {
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/" element={<RenderLayout><Settings /></RenderLayout>} />
             <Route path="/frameratePicker" element={<RenderLayout><FrameratePicker /></RenderLayout>} />
             <Route path="/library" element={<RenderLayout noPadding><Library /></RenderLayout>} />
+            <Route path="/home" element={<RenderLayout noPadding><Home /></RenderLayout>} />
           </Routes>
         </Router>
         <div className="absolute bottom-4 left-4">

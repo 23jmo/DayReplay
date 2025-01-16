@@ -18,7 +18,7 @@ import log from 'electron-log';
 import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
-import { getRecordingStats, resolveHtmlPath } from './util';
+import { getRecordingStats, resolveHtmlPath, setAutoRecording, getAutoRecording, setTray } from './util';
 import { daysStore, settingsStore, customPromptStore } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
@@ -254,6 +254,16 @@ app
       const menuBuilder = new MenuBuilder(tray);
       const contextMenu = menuBuilder.buildMenu();
       tray.setContextMenu(contextMenu);
+
+      // Set the tray reference first
+      setTray(tray);
+
+      // Then initialize auto-recording from saved settings
+      const autoRecordEnabled = getAutoRecording();
+      if (autoRecordEnabled) {
+        log.info('Auto-recording was enabled, starting app tracking...');
+        setAutoRecording(true); // This will start app tracking and check for activity
+      }
 
       log.info('Tray created successfully');
 

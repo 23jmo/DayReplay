@@ -5,6 +5,7 @@ export interface Settings {
   interval: number;
   resolution: string;
   framerate: number;
+  autoRecord: boolean;
 }
 
 export interface CustomPrompt {
@@ -23,6 +24,10 @@ const settingsSchema = {
   framerate: {
     type: 'number',
     default: 30,
+  },
+  autoRecord: {
+    type: 'boolean',
+    default: true,
   },
 } as const;
 
@@ -74,5 +79,5 @@ const customPromptStore = new Store<CustomPrompt>({
   schema: customPromptSchema,
   name: 'customPrompt',
 });
-
 export { settingsStore, daysStore, customPromptStore };
+

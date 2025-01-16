@@ -12,12 +12,126 @@ import { writeFile } from 'fs/promises';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { activeWindow } from 'get-windows';
+import MenuBuilder from './menu';
 
 const execAsync = promisify(exec);
 
 import {TrayIcons} from './assets'
 import { DayEntry, AppUsageData } from '../shared/types';
-import { daysStore } from './store';
+import { daysStore, settingsStore } from './store';
+
+/* Defining Variables */
+let screenshotCount = 0;
+let recordingInterval: ReturnType<typeof setInterval> | null = null;
+let appTrackingInterval: ReturnType<typeof setInterval> | null = null;
+let framerate: number;
+let resolution: string;
+let intervalInSeconds: number;
+let startDate = Date.now();
+let isAutoRecordingEnabled = false;
+let appTray: Tray | null = null;
+let isRecording = false;
+let isPaused = false;
+
+// Add a callback for menu updates
+let onRecordingStateChange: (() => void) | null = null;
+
+export function setMenuUpdateCallback(callback: () => void) {
+  onRecordingStateChange = callback;
+}
+
+function updateMenu() {
+  if (onRecordingStateChange) {
+    onRecordingStateChange();
+  }
+}
+
+// Add variables for login window handling
+let loginWindowStartTime: number | null = null;
+let loginWindowTimer: ReturnType<typeof setTimeout> | null = null;
+let wasRecordingBeforeLoginWindow = false;
+
+// App tracking variables
+let currentApp: AppUsageData | null = null;
+let appUsageData: AppUsageData[] = [];
+
+// Function to get the current active window info
+async function getActiveWindowInfo(): Promise<AppUsageData | null> {
+  try {
+    const activeWinInfo = await activeWindow({
+      screenRecordingPermission: true,
+      accessibilityPermission: true
+    });
+
+    if (!activeWinInfo) return null;
+
+    return {
+      appName: activeWinInfo.owner.name,
+      title: activeWinInfo.title,
+      url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
+      owner: {
+        name: activeWinInfo.owner.name,
+        path: activeWinInfo.owner.path,
+      },
+      startTime: Date.now(),
+      endTime: Date.now(),
+      duration: 0,
+    };
+  } catch (error) {
+    log.error('Error getting active window:', error);
+    return null;
+  }
+}
+
+export function setTray(tray: Tray) {
+  appTray = tray;
+  if (isAutoRecordingEnabled) {
+    checkAndAutoStartRecording(tray);
+  }
+}
+
+export function setAutoRecording(enabled: boolean) {
+  isAutoRecordingEnabled = enabled;
+  settingsStore.set('autoRecord', enabled);
+
+  if (enabled && !appTrackingInterval) {
+    // Start tracking app changes to detect activity
+    appTrackingInterval = setInterval(trackAppChange, 1000);
+    log.info('Started app tracking for auto-recording');
+    if (appTray) {
+      checkAndAutoStartRecording(appTray);
+    }
+  } else if (!enabled && appTrackingInterval) {
+    clearInterval(appTrackingInterval);
+    appTrackingInterval = null;
+    log.info('Stopped app tracking');
+  }
+}
+
+export function getAutoRecording(): boolean {
+  const enabled = settingsStore.get('autoRecord') ?? false;
+  isAutoRecordingEnabled = enabled;
+  return enabled;
+}
+
+// Function to check if we should auto-start recording
+async function checkAndAutoStartRecording(tray: Tray) {
+  if (!isAutoRecordingEnabled || recordingInterval) return;
+
+  try {
+    const newAppInfo = await getActiveWindowInfo();
+    if (newAppInfo && newAppInfo.appName !== 'loginwindow') {
+      log.info('Auto-starting recording');
+      const settings = {
+        interval: settingsStore.get('interval') || 30,
+        resolution: settingsStore.get('resolution') || '1920x1080'
+      };
+      startRecording(settings.interval, settings.resolution, tray);
+    }
+  } catch (error) {
+    log.error('Error in auto-start check:', error);
+  }
+}
 
 // Configure logging
 log.transports.file.level = 'debug';
@@ -80,49 +194,7 @@ try {
   throw error;
 }
 
-/* Defining Variables */
-
-let screenshotCount = 0;
-let recordingInterval: ReturnType<typeof setInterval> | null = null;
-let appTrackingInterval: ReturnType<typeof setInterval> | null = null;
-let framerate: number;
-let resolution: string;
-let intervalInSeconds: number;
-let startDate = Date.now(); //timestamp of when the recording started
-
-// App tracking variables
-let currentApp: AppUsageData | null = null;
-let appUsageData: AppUsageData[] = [];
-
-// Function to get the current active window info
-async function getActiveWindowInfo(): Promise<AppUsageData | null> {
-  try {
-    const activeWinInfo = await activeWindow({
-      screenRecordingPermission: true,
-      accessibilityPermission: true
-    });
-
-    if (!activeWinInfo) return null;
-
-    return {
-      appName: activeWinInfo.owner.name,
-      title: activeWinInfo.title,
-      url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
-      owner: {
-        name: activeWinInfo.owner.name,
-        path: activeWinInfo.owner.path,
-      },
-      startTime: Date.now(),
-      endTime: Date.now(), // Will be updated when app changes
-      duration: 0, // Will be calculated when app changes
-    };
-  } catch (error) {
-    log.error('Error getting active window:', error);
-    return null;
-  }
-}
-
-// Function to track app changes
+// Modify trackAppChange to handle auto-recording
 async function trackAppChange() {
   try {
     const newAppInfo = await getActiveWindowInfo();
@@ -130,13 +202,56 @@ async function trackAppChange() {
 
     if (!newAppInfo) return;
 
+    // Auto-start recording if enabled and user is active
+    if (appTray && newAppInfo.appName !== 'loginwindow') {
+      checkAndAutoStartRecording(appTray);
+    }
+
+    // Handle login window state
+    if (newAppInfo.appName === 'loginwindow') {
+      if (!loginWindowStartTime) {
+        loginWindowStartTime = now;
+        wasRecordingBeforeLoginWindow = recordingInterval !== null;
+
+        // Start the 5-minute timer
+        loginWindowTimer = setTimeout(() => {
+          // If we're still in login window after 5 minutes, clear the recording state
+
+          if (loginWindowStartTime && wasRecordingBeforeLoginWindow && appTray){
+            exportRecordingWithUserPath(appTray, framerate);
+          }
+          if (loginWindowStartTime) {
+            wasRecordingBeforeLoginWindow = false;
+            loginWindowStartTime = null;
+            if (loginWindowTimer) {
+              clearTimeout(loginWindowTimer);
+              loginWindowTimer = null;
+            }
+          }
+        }, 5 * 60 * 1000); // 5 minutes in milliseconds
+      }
+      return; // Skip tracking login window activity
+    } else {
+      // If we're coming back from login window
+      if (loginWindowStartTime) {
+        // Clear login window state
+        loginWindowStartTime = null;
+        if (loginWindowTimer) {
+          clearTimeout(loginWindowTimer);
+          loginWindowTimer = null;
+        }
+      }
+    }
+
     if (currentApp && (currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title)) {
-      // App or window has changed, log the previous app's duration
-      const duration = now - currentApp.startTime;
-      currentApp.endTime = now;
-      currentApp.duration = duration;
-      appUsageData.push(currentApp);
-      log.debug(`App change: ${currentApp.appName} (${currentApp.title}) -> ${newAppInfo.appName} (${newAppInfo.title}), duration: ${duration}ms`);
+      // Only track non-login-window apps
+      if (currentApp.appName !== 'login-window') {
+        const duration = now - currentApp.startTime;
+        currentApp.endTime = now;
+        currentApp.duration = duration;
+        appUsageData.push(currentApp);
+        log.debug(`App change: ${currentApp.appName} (${currentApp.title}) -> ${newAppInfo.appName} (${newAppInfo.title}), duration: ${duration}ms`);
+      }
     }
 
     if (!currentApp || currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title) {
@@ -155,6 +270,12 @@ function resetAppTracking() {
   }
   currentApp = null;
   appUsageData = [];
+  loginWindowStartTime = null;
+  if (loginWindowTimer) {
+    clearTimeout(loginWindowTimer);
+    loginWindowTimer = null;
+  }
+  wasRecordingBeforeLoginWindow = false;
 }
 
 // Get current app tracking data
@@ -303,6 +424,14 @@ export function resetRecordingStats() {
   screenshotCount = 0;
 }
 
+// Export recording state getters
+export function getRecordingState() {
+  return {
+    isRecording,
+    isPaused,
+  };
+}
+
 // Extend the existing startRecording function
 export function startRecording(interval: number, res: string, tray: Tray): boolean {
   if (recordingInterval) {
@@ -315,6 +444,10 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
   intervalInSeconds = interval;
   resetRecordingStats();
   resetAppTracking(); // Reset app tracking when starting new recording
+
+  setTray(tray);
+  isRecording = true;
+  isPaused = false;
 
   // set active icon
   tray.setImage(TrayIcons.active);
@@ -344,17 +477,6 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
 
   recordingInterval = setInterval(async () => {
     try {
-      const hasPermission = await checkScreenRecordingPermission();
-      if (!hasPermission) {
-        log.error('Screen recording permission denied');
-        dialog.showErrorBox(
-          'Permission Required',
-          'Screen recording permission was denied. Please enable screen recording for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording, then try again.'
-        );
-        pauseRecording(tray);
-        return;
-      }
-
       const fileName = path.join(tempDir, `${screenshotCount + 1}.jpg`);
       const imgPath = await takeScreenshot(fileName);
       screenshotCount++; // Increment counter after successful screenshot
@@ -371,22 +493,13 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
           'Failed to take screenshots multiple times. Recording has been stopped.'
         );
         pauseRecording(tray);
-        return;
-      }
-
-      // Check if error is permission related
-      if (error.message?.includes('permission') || error.message?.includes('denied')) {
-        dialog.showErrorBox(
-          'Permission Required',
-          'Screen recording permission was denied. Please enable screen recording for Day Replay in System Preferences > Security & Privacy > Privacy > Screen Recording, then try again.'
-        );
-        pauseRecording(tray);
-      } else {
-        // Log error but continue trying
-        log.error('Screenshot error:', error);
+        return false;
       }
     }
   }, interval * 1000);
+
+  // Update the menu to reflect recording state
+  updateMenu();
 
   return true;
 }
@@ -396,6 +509,7 @@ export function pauseRecording(tray: Tray) {
     clearInterval(recordingInterval);
     log.info('Recording paused. Total screenshots taken:', screenshotCount);
     recordingInterval = null;
+    isPaused = true;
 
     // Final app tracking update before pausing
     if (currentApp) {
@@ -414,11 +528,15 @@ export function pauseRecording(tray: Tray) {
 
     // set default icon
     tray.setImage(TrayIcons.default);
+    updateMenu();
   }
 }
 
-export async function exportRecording(tray: Tray, fps: number) {
+export async function exportRecordingWithUserPath(tray: Tray, fps: number) {
   pauseRecording(tray);
+  isRecording = false;
+  isPaused = false;
+  updateMenu();
   const files = fs.readdirSync(tempDir);
 
   log.info('Exporting recording with files:', files);
@@ -462,93 +580,7 @@ export async function exportRecording(tray: Tray, fps: number) {
     return;
   }
 
-  try {
-    log.info('Using temp directory:', tempDir);
-
-    // Get the ffmpeg path that was set up earlier
-    const ffmpegPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
-      : path.join(__dirname, '../../ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
-
-    log.info('Using FFmpeg path for export:', ffmpegPath);
-
-    if (!fs.existsSync(ffmpegPath)) {
-      throw new Error(`FFmpeg not found at ${ffmpegPath}`);
-    }
-
-    // Create a new ffmpeg command with the correct path
-    const command = ffmpeg()
-      .setFfmpegPath(ffmpegPath)
-      .input(path.join(tempDir, '%d.jpg'))
-      .inputOptions(['-framerate', fps.toString(), '-start_number', '1'])
-      .videoCodec('libx264')
-      .outputOptions(['-pix_fmt yuv420p', '-preset medium', '-y'])
-      .on('start', (cmd: string) => {
-        log.info('FFmpeg command:', cmd);
-      })
-      .output(filePath)
-      .on('end', () => {
-        log.info('Timelapse export completed:', filePath);
-
-        const localDayDir = path.join(app.getPath('appData'), "DayReplays");
-        // Create the directory if it doesn't exist
-        if (!fs.existsSync(localDayDir)) {
-          fs.mkdirSync(localDayDir, { recursive: true });
-        }
-
-        const localFilePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
-        //save a local copy to the days folder
-        fs.copyFileSync(filePath, localFilePath);
-        log.info('Local copy saved to:', localFilePath);
-
-        //edit the json
-        const dayEntry = {
-          startDate: startDate.toString(),
-          fps: fps,
-          resolution: resolution,
-          interval: intervalInSeconds,
-          duration: screenshotCount * intervalInSeconds,
-          numShots: screenshotCount,
-          videoPath: localFilePath,
-          timelinePath: '',
-          productivity: 0,
-          thumbnailPath: '',
-          tags: [],
-          appUsage: appUsageData, // Add app usage data to the entry
-        };
-
-        // Get current days and append new entry
-        // @ts-ignore - electron-store types are not properly exposed
-        const currentDays = daysStore.get('days') ?? [];
-        // @ts-ignore - electron-store types are not properly exposed
-        daysStore.set('days', [...currentDays, dayEntry]);
-        // @ts-ignore - electron-store types are not properly exposed
-        log.info('Days updated in store to be:', daysStore.get('days'));
-
-        dialog.showMessageBox({
-          type: 'info',
-          message: 'Timelapse export completed',
-          detail: 'Your replay has been saved to ' + filePath,
-        });
-      })
-      .on('error', (err: Error) => {
-        log.error('Error exporting timelapse:', err);
-        throw err;
-      });
-
-    // Run the command and wait for it to complete
-    await new Promise((resolve, reject) => {
-      command.run();
-      command.on('end', resolve);
-      command.on('error', reject);
-    });
-
-  } catch (error) {
-    log.error('Failed to start ffmpeg process:', error);
-    throw error;
-  }
-
-  clearTempDir();
+  await exportRecordingToPath(filePath, fps);
 }
 
 export function resumeRecording(interval: number, tray: Tray) {
@@ -557,6 +589,7 @@ export function resumeRecording(interval: number, tray: Tray) {
     return false;
   }
 
+  isPaused = false;
   tray.setImage(TrayIcons.active);
 
   recordingInterval = setInterval(async () => {
@@ -571,7 +604,91 @@ export function resumeRecording(interval: number, tray: Tray) {
     }
   }, interval * 1000);
 
+  updateMenu();
   return true;
 }
 
 log.info('Log location:', log.transports.file.getFile().path);
+
+async function exportRecordingToPath(filePath: string, fps: number) {
+  try {
+    log.info('Using temp directory:', tempDir);
+
+    const ffmpegPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
+      : path.join(__dirname, '../../ffmpeg', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+
+    log.info('Using FFmpeg path for export:', ffmpegPath);
+
+    if (!fs.existsSync(ffmpegPath)) {
+      throw new Error(`FFmpeg not found at ${ffmpegPath}`);
+    }
+
+    const command = ffmpeg()
+      .setFfmpegPath(ffmpegPath)
+      .input(path.join(tempDir, '%d.jpg'))
+      .inputOptions(['-framerate', fps.toString(), '-start_number', '1'])
+      .videoCodec('libx264')
+      .outputOptions(['-pix_fmt yuv420p', '-preset medium', '-y'])
+      .on('start', (cmd: string) => {
+        log.info('FFmpeg command:', cmd);
+      })
+      .output(filePath)
+      .on('end', () => {
+        log.info('Timelapse export completed:', filePath);
+
+        const localDayDir = path.join(app.getPath('appData'), "DayReplays");
+        if (!fs.existsSync(localDayDir)) {
+          fs.mkdirSync(localDayDir, { recursive: true });
+        }
+
+        const localFilePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
+        fs.copyFileSync(filePath, localFilePath);
+        log.info('Local copy saved to:', localFilePath);
+
+        const dayEntry = {
+          startDate: startDate.toString(),
+          fps: fps,
+          resolution: resolution,
+          interval: intervalInSeconds,
+          duration: screenshotCount * intervalInSeconds,
+          numShots: screenshotCount,
+          videoPath: localFilePath,
+          timelinePath: '',
+          productivity: 0,
+          thumbnailPath: '',
+          tags: [],
+          appUsage: appUsageData,
+        };
+
+        // @ts-ignore - electron-store types are not properly exposed
+        const currentDays = daysStore.get('days') ?? [];
+        // @ts-ignore - electron-store types are not properly exposed
+        daysStore.set('days', [...currentDays, dayEntry]);
+        //@ts-ignore - electron-store types are not properly exposed
+        log.info('Days updated in store to be:', daysStore.get('days'));
+
+        dialog.showMessageBox({
+          type: 'info',
+          message: 'Timelapse export completed',
+          detail: 'Your replay has been saved to ' + filePath,
+        });
+      })
+      .on('error', (err: Error) => {
+        log.error('Error exporting timelapse:', err);
+        throw err;
+      });
+
+    await new Promise((resolve, reject) => {
+      command.run();
+      command.on('end', resolve);
+      command.on('error', reject);
+    });
+
+  } catch (error) {
+    log.error('Failed to start ffmpeg process:', error);
+    throw error;
+  }
+
+  clearTempDir();
+}
