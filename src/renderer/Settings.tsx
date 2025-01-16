@@ -5,6 +5,7 @@ import { getCustomPrompt, setCustomPrompt } from '../shared/custom-prompt';
 import { Button } from '@/components/ui/button';
 import { toast, Toaster } from 'sonner';
 import { ipcRenderer } from 'electron';
+import { Input } from '@/components/ui/input';
 
 export default function Settings() {
   const [interval, setInterval] = useState(5);
@@ -28,6 +29,16 @@ export default function Settings() {
   const resolutionOptions = ['1920x1080', '1280x720', '3840x2160'];
   const frameRateOptions = [24, 30, 60];
   const intervalOptions = [1, 3, 5, 10, 15, 30];
+
+  const [openAIAPIKey, setOpenAIAPIKey] = useState('');
+
+  useEffect(() => {
+    const loadOpenAIAPIKey = async () => {
+      const key = await window.electronAPI.getOpenAIAPIKey();
+      setOpenAIAPIKey(key);
+    };
+    loadOpenAIAPIKey();
+  }, []);
 
 
 
@@ -145,6 +156,7 @@ export default function Settings() {
           </Select>
         </div>
 
+
         <div className="space-y-2">
           <label className="text-sm font-medium leading-none text-foreground">
             What's your definition of productivity?
@@ -162,6 +174,28 @@ export default function Settings() {
               await setPrompt(customPrompt);
               toast.success('Productivity definition updated');
             }}>Save</Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">Open AI API Key</label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              placeholder="Enter your Open AI API key"
+              value={openAIAPIKey}
+              onChange={(e) => setOpenAIAPIKey(e.target.value)}
+            />
+            <Button
+              onClick={async () => {
+                const text = await navigator.clipboard.readText();
+                setOpenAIAPIKey(text);
+                await window.electronAPI.setOpenAIAPIKey(text);
+                toast.success('Open AI API key updated');
+              }}
+            >
+              Paste & Save
+            </Button>
           </div>
         </div>
       </div>

@@ -20,6 +20,8 @@ interface ElectronAPI {
   setCustomPrompt: (prompt: string) => Promise<boolean>;
   showInFinder: (filePath: string) => Promise<void>;
   shareFile: (filePath: string) => Promise<void>;
+  getOpenAIAPIKey: () => Promise<string>;
+  setOpenAIAPIKey: (key: string) => Promise<boolean>;
 }
 
 declare global {
@@ -46,6 +48,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCustomPrompt: (prompt: string) => ipcRenderer.invoke('custom-prompt:set', prompt),
   showInFinder: (filePath: string) => ipcRenderer.invoke('show-in-finder', filePath),
   shareFile: (filePath: string) => ipcRenderer.invoke('share-file', filePath),
+  getOpenAIAPIKey: () => ipcRenderer.invoke('openai-api-key:get'),
+  setOpenAIAPIKey: (key: string) => ipcRenderer.invoke('openai-api-key:set', key),
 });
 
 contextBridge.exposeInMainWorld('electron', {

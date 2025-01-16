@@ -8,6 +8,10 @@ export interface Settings {
   autoRecord: boolean;
 }
 
+export interface OpenAIAPIKey {
+  openaiApiKey: string;
+}
+
 export interface CustomPrompt {
   prompt: string;
 }
@@ -65,6 +69,13 @@ const daysSchema = {
   },
 } as const;
 
+const openAIAPIKeySchema = {
+  openaiApiKey: {
+    type: 'string',
+    default: '',
+  },
+} as const;
+
 const settingsStore = new Store<Settings>({
   schema: settingsSchema,
   name: 'settings',
@@ -79,5 +90,11 @@ const customPromptStore = new Store<CustomPrompt>({
   schema: customPromptSchema,
   name: 'customPrompt',
 });
-export { settingsStore, daysStore, customPromptStore };
+
+const openAIAPIKeyStore = new Store<OpenAIAPIKey>({
+  schema: openAIAPIKeySchema,
+  name: 'openaiApiKey',
+});
+
+export { settingsStore, daysStore, customPromptStore, openAIAPIKeyStore };
 

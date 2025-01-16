@@ -19,7 +19,7 @@ import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
 import { getRecordingStats, resolveHtmlPath, setAutoRecording, getAutoRecording, setTray } from './util';
-import { daysStore, settingsStore, customPromptStore } from './store';
+import { daysStore, settingsStore, customPromptStore, openAIAPIKeyStore } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
 
@@ -116,6 +116,17 @@ ipcMain.handle('share-file', async (event, filePath: string) => {
     // Fallback for non-macOS platforms
     shell.showItemInFolder(filePath);
   }
+});
+
+ipcMain.handle('openai-api-key:get', async () => {
+  //@ts-ignore
+  return openAIAPIKeyStore.get('openaiApiKey');
+});
+
+ipcMain.handle('openai-api-key:set', async (_, key: string) => {
+  //@ts-ignore
+  openAIAPIKeyStore.set('openaiApiKey', key);
+  return true;
 });
 
 ipcMain.handle('show-in-finder', async (_, filePath: string) => {
