@@ -161,32 +161,6 @@ function safelyStopRecording() {
   currentApp = null;
 }
 
-// Helper function for automatic export
-async function autoExportRecording(fps: number = 30): Promise<void> {
-  try {
-    // Check if we have any screenshots to export
-    const files = fs.readdirSync(tempDir).filter(file => file.endsWith('.jpg'));
-    if (files.length === 0) {
-      log.warn('No screenshots found to export');
-      return;
-    }
-
-    const localDayDir = path.join(app.getPath('appData'), "DayReplays");
-    if (!fs.existsSync(localDayDir)) {
-      fs.mkdirSync(localDayDir, { recursive: true });
-    }
-
-    const filePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
-
-    // Use the same export function as manual exports to ensure consistent behavior
-    await exportRecordingToPath(filePath, fps);
-    log.info('Auto-export completed successfully');
-  } catch (error) {
-    log.error('Failed to auto-export recording:', error);
-    throw error; // Propagate error to caller
-  }
-}
-
 // Helper function to reset login window state
 function resetLoginWindowState() {
   loginWindowStartTime = null;
@@ -209,6 +183,7 @@ async function trackAppChange() {
     // auto start recording if enabled and user is active
     if (newAppInfo.appName !== 'loginwindow') {
       // check if exiting a login session (i.e user is now active again)
+      //TODO: fix the logic on when to reset the login window state and resume recording and when it should just start a new auto recording
       if (loginWindowStartTime) {
         // User became active before timeout, cancel the timeout and continue recording
         safelyResumeRecording();
@@ -246,11 +221,13 @@ async function trackAppChange() {
               try {
                 // First, properly stop all tracking and recording
                 if (currentApp) {
-                  // Add final app usage entry
-                  const now = Date.now();
-                  currentApp.endTime = now;
-                  currentApp.duration = now - currentApp.startTime;
-                  appUsageData.push(currentApp);
+                  // Add final app usage entry as long as its not the login window
+                  if (currentApp.appName !== 'loginwindow') {
+                    const now = Date.now();
+                    currentApp.endTime = now;
+                    currentApp.duration = now - currentApp.startTime;
+                    appUsageData.push(currentApp);
+                  }
                   currentApp = null;
                 }
 
@@ -398,9 +375,6 @@ export function setAutoRecording(enabled: boolean) {
     appTrackingInterval = null;
     log.info('Stopped app tracking');
   }
-
-  //TODO: wait to implement - think thru logic first before AI does it
-
 }
 
 /**
@@ -656,9 +630,12 @@ log.info('Log location:', log.transports.file.getFile().path);
 
 //--------------Export Functionality--------------------------------
 
+
+
 // Export recording functions
-export async function exportRecordingToPath(filePath: string, fps: number) {
-  const exportBackupDir = path.join(app.getPath('temp'), `DayReplay-export-${startDate}`);
+export async function exportRecordingToPath(filePath: string, fps: number, backupDir: string) {
+
+  const exportBackupDir = backupDir;
 
   try {
     log.info('Starting export process...');
@@ -709,6 +686,18 @@ export async function exportRecordingToPath(filePath: string, fps: number) {
     const backupFiles = await fs.promises.readdir(exportBackupDir);
     log.info(`Successfully copied ${backupFiles.length} files to backup directory`);
 
+    // if applicable, read in the app usage data from the backup directory
+    const appUsageFile = path.join(exportBackupDir, 'appUsage.json');
+    let currentAppUsageData: AppUsageData[] = [];
+    if (fs.existsSync(appUsageFile)) {
+      const appUsageContent = await fs.promises.readFile(appUsageFile, 'utf-8');
+      currentAppUsageData = JSON.parse(appUsageContent);
+    }
+    else{
+      log.error('No app usage file found in backup directory');
+      currentAppUsageData = appUsageData;
+    }
+
     const dayEntry = {
       startDate: startDate.toString(),
       fps: fps,
@@ -721,7 +710,7 @@ export async function exportRecordingToPath(filePath: string, fps: number) {
       productivity: 0,
       thumbnailPath: '',
       tags: [],
-      appUsage: appUsageData,
+      appUsage: currentAppUsageData,
     };
 
     try {
@@ -875,8 +864,8 @@ export async function exportRecordingWithUserPath(tray: Tray, fps: number) {
     log.info('Export cancelled by user');
     return;
   }
-
-  await exportRecordingToPath(filePath, fps);
+  const exportDir = path.join(app.getPath('temp'), `DayReplay-export-${startDate}`);
+  await exportRecordingToPath(filePath, fps, exportDir);
 }
 
 //--------------Utils--------------------------------
@@ -1065,6 +1054,10 @@ export async function processExportQueue() {
             const appUsageContent = await fs.promises.readFile(appUsageFile, 'utf-8');
             appUsageData = JSON.parse(appUsageContent);
           }
+          else{
+            log.error('No app usage file found in backup directory');
+            continue;
+          }
 
           // Restore other necessary state
           startDate = item.startDate;
@@ -1081,7 +1074,7 @@ export async function processExportQueue() {
             const filePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
 
             // Export directly from backup directory
-            await exportRecordingToPath(filePath, 30);
+            await exportRecordingToPath(filePath, 30, item.backupDir);
             log.info('[QUEUE PROCESS]: Successfully processed queued export for startDate:', item.startDate);
 
             // Only clean up backup after successful export
