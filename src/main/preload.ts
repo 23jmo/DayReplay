@@ -7,6 +7,7 @@ interface Settings {
   interval: number;
   resolution: string;
   framerate: number;
+  loginWindowTimeout: number;
 }
 
 interface ElectronAPI {

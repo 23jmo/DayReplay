@@ -48,8 +48,9 @@ export default class MenuBuilder {
   private statsUpdateInterval: NodeJS.Timer | null = null;
 
   constructor(tray: Tray) {
-
     this.tray = tray;
+    // Add reference to this menu builder in the tray object
+    (this.tray as any).menuBuilder = this;
 
     // Register for menu updates when recording state changes
     setMenuUpdateCallback(() => {
@@ -110,7 +111,7 @@ export default class MenuBuilder {
     this.resetStatsUpdate();
   }
 
-  private startStatsUpdate(interval: number) {
+  public startStatsUpdate(interval: number) {
     console.log('Starting stats update');
     if (this.statsUpdateInterval) {
       clearInterval(this.statsUpdateInterval as NodeJS.Timeout);
@@ -369,3 +370,4 @@ export default class MenuBuilder {
   }
 
 }
+

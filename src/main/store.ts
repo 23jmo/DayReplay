@@ -6,6 +6,15 @@ export interface Settings {
   resolution: string;
   framerate: number;
   autoRecord: boolean;
+  loginWindowTimeout: number;
+  exportQueue: Array<{
+    startDate: number;
+    timestamp: number;
+    backupDir: string;
+    screenshotCount: number;
+    interval: number;
+    resolution: string;
+  }>;
 }
 
 export interface OpenAIAPIKey {
@@ -32,6 +41,25 @@ const settingsSchema = {
   autoRecord: {
     type: 'boolean',
     default: true,
+  },
+  loginWindowTimeout: { // in seconds
+    type: 'number',
+    default: 5,
+  },
+  exportQueue: {
+    type: 'array',
+    default: [],
+    items: {
+      type: 'object',
+      properties: {
+        startDate: { type: 'number' },
+        timestamp: { type: 'number' },
+        backupDir: { type: 'string' },
+        screenshotCount: { type: 'number' },
+        interval: { type: 'number' },
+        resolution: { type: 'string' }
+      }
+    }
   },
 } as const;
 

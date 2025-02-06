@@ -18,7 +18,7 @@ import log from 'electron-log';
 import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
-import { getRecordingStats, resolveHtmlPath, setAutoRecording, getAutoRecording, setTray } from './util';
+import { getRecordingStats, resolveHtmlPath, setAutoRecording, getAutoRecording, setTray, processExportQueue, clearExportQueue } from './util';
 import { daysStore, settingsStore, customPromptStore, openAIAPIKeyStore } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
@@ -240,6 +240,25 @@ app.on('window-all-closed', () => {
   }
 });
 
+let isQuitting = false;
+
+app.on('before-quit', async (event) => {
+  if (isQuitting) return; // Prevent infinite loop
+
+  event.preventDefault();
+  isQuitting = true;
+
+  try {
+    await clearExportQueue();
+    log.info('Export queue cleared before quit');
+  } catch (error) {
+    log.error('Failed to clear export queue before quit:', error);
+  } finally {
+    // Use process.exit to ensure clean exit
+    process.exit(0);
+  }
+});
+
 app
   .whenReady()
   .then(async () => {
@@ -251,6 +270,11 @@ app
       log.info('Resources path:', process.resourcesPath);
       log.info('App path:', app.getAppPath());
       log.info('Looking for tray icon at:', TrayIcons.default);
+
+      // Clear any leftover export queue from previous session
+      await clearExportQueue().catch(error => {
+        log.error('Failed to clear export queue:', error);
+      });
 
       if (!fs.existsSync(TrayIcons.default)) {
         log.error('Tray icon not found!');
@@ -382,11 +406,10 @@ app.on('ready', () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' file: data: blob: local-file:",
-          "img-src 'self' file: data: blob: local-file:",
-          "media-src 'self' file: blob: local-file:",
+          "default-src 'self' 'unsafe-inline' file: data: blob: local-file: http://localhost:8000; img-src 'self' file: data: blob: local-file:; media-src 'self' file: blob: local-file:; connect-src 'self' http://localhost:8000"
         ],
       },
     });
   });
 });
+

@@ -9,11 +9,49 @@ interface TimelineProps {
   onSeek: (timestamp: number) => void
 }
 
+interface GroupedUsage {
+  appName: string
+  startTime: number
+  endTime: number
+  duration: number
+  activities: AppUsageData[]
+}
+
 const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration, onSeek }) => {
   if (!appUsage.length) return null
 
   const startTime = appUsage[0]?.startTime || 0
   const endTime = appUsage[appUsage.length - 1]?.endTime || startTime
+
+  // Group adjacent items by app name
+  const groupedUsage: GroupedUsage[] = []
+  let currentGroup: GroupedUsage | null = null
+
+  appUsage.forEach((usage) => {
+    if (!currentGroup || currentGroup.appName !== usage.appName) {
+      // Start a new group
+      if (currentGroup) {
+        groupedUsage.push(currentGroup)
+      }
+      currentGroup = {
+        appName: usage.appName,
+        startTime: usage.startTime,
+        endTime: usage.endTime,
+        duration: usage.duration,
+        activities: [usage]
+      }
+    } else {
+      // Add to current group
+      currentGroup.endTime = usage.endTime
+      currentGroup.duration += usage.duration
+      currentGroup.activities.push(usage)
+    }
+  })
+
+  // Add the last group
+  if (currentGroup) {
+    groupedUsage.push(currentGroup)
+  }
 
   // Create time markers every hour
   const markers = []
@@ -44,22 +82,20 @@ const Timeline: React.FC<TimelineProps> = ({ appUsage, totalDuration, onSeek }) 
     <div>
       {/* Timeline container */}
       <div className="relative">
-
-
         {/* Timeline bar */}
         <div className="relative w-full h-4 bg-gray-100 rounded-lg overflow-hidden">
           {/* App segments */}
-          {appUsage.map((usage, index) => {
-            const left = ((usage.startTime - startTime) / totalDuration) * 100
-            const width = (usage.duration / totalDuration) * 100
-            const color = `hsl(${Math.abs(usage.appName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 360}, 70%, 50%)`
+          {groupedUsage.map((group, index) => {
+            const left = ((group.startTime - startTime) / totalDuration) * 100
+            const width = (group.duration / totalDuration) * 100
+            const color = `hsl(${Math.abs(group.appName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 360}, 70%, 50%)`
 
             return (
               <TimelineItem
                 key={index}
-                usage={usage}
+                group={group}
                 index={index}
-                totalItems={appUsage.length}
+                totalItems={groupedUsage.length}
                 left={left}
                 width={width}
                 color={color}

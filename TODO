@@ -1,22 +1,27 @@
 
 Phase 1:
-  ☐ publish the app - set up build as dmg
+  ✔ publish the app - set up build as dmg @done(25-02-05 14:36)
   ☐ set up auto-updater
   ☐ add a way to rescue unexported screenshots
 Phase 2:
-  ☐ create a library of previous timelapses
-  ☐ set up mongo or maybe firebase to store these timelapses to account for user
-  ☐ react routing and a sidebar with settings, library, and statistics?
-  ☐ ability to review previous timelapses
-  ☐ ability to delete timelapses, export timelapses
+  ✔ create a library of previous timelapses @done(25-02-05 14:36)
+  ✔ react routing and a sidebar with settings, library, and statistics? @done(25-02-05 14:37)
+  ✔ ability to review previous timelapses @done(25-02-05 14:37)
+  ✔ ability to delete timelapses, export timelapses @done(25-02-05 14:37)
 AI Features:
-  ☐ detect activity changes and mark key frames
-  ☐ review key frames (llm) and get back the activity category and productivity score
+  ✔ detect activity changes and mark key frames @done(25-02-05 14:37)
+  ✔ review key frames (llm) and get back the activity category and productivity score @done(25-02-05 14:37)
   ☐ Generate a summary of the timelapse as well as a timeline of the day that I can render
-  ☐ save these stats to the database
+  ☐ save these stats to the database (firebase)
+  ☐ Add a local chromadb or something where I can query
+Analysis/Home Page:
+  ☐ Add Today stats
+    ☐ Time spent timelapsing
+    ☐ Apps list and time per app
+    This should lowkey all be saved to the database (I'm thinking firebase? or maybe supabase or mongo)
+UI Features:
+  ☐ Right click menu on the notes sidebar
+    ☐ option to delete the timelapse, export it, idk 
+  ☐ Allow hiding and showing the nodes sidebar
 
-
-
-
-Phase 3 corporate management:
-  ☐
+Miscellaneous:

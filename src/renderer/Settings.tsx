@@ -31,6 +31,7 @@ export default function Settings() {
   const intervalOptions = [1, 3, 5, 10, 15, 30];
 
   const [openAIAPIKey, setOpenAIAPIKey] = useState('');
+  const [loginWindowTimeout, setLoginWindowTimeout] = useState(5);
 
   useEffect(() => {
     const loadOpenAIAPIKey = async () => {
@@ -57,7 +58,7 @@ export default function Settings() {
     const loadPrompt = async () => {
       const prompt = await getPrompt()
       setCustomPrompt(prompt)
-    }
+    } 
     loadPrompt()
   }, [])
 
@@ -80,6 +81,7 @@ export default function Settings() {
                 interval: newInterval,
                 resolution,
                 framerate,
+                loginWindowTimeout,
               });
               toast.success('Screenshot interval updated');
             }}
@@ -109,6 +111,7 @@ export default function Settings() {
                 interval,
                 resolution: value,
                 framerate,
+                loginWindowTimeout,
               });
               toast.success('Resolution updated');
             }}
@@ -139,6 +142,7 @@ export default function Settings() {
                 interval,
                 resolution,
                 framerate: newFramerate,
+                loginWindowTimeout,
               });
               toast.success('Framerate updated');
             }}
@@ -156,6 +160,24 @@ export default function Settings() {
           </Select>
         </div>
 
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none text-foreground">Login Window Timeout (seconds)</label>
+          <Input
+            type="number"
+            value={loginWindowTimeout}
+            onChange={async (e) => {
+              const newTimeout = Number(e.target.value);
+              setLoginWindowTimeout(newTimeout);
+              await window.electronAPI.saveSettings({
+                interval,
+                resolution,
+                framerate,
+                loginWindowTimeout: newTimeout,
+              });
+              toast.success('Login window timeout updated');
+            }}
+          />
+        </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium leading-none text-foreground">
@@ -178,20 +200,41 @@ export default function Settings() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium leading-none text-foreground">Open AI API Key</label>
+          <label className="text-sm font-medium leading-none text-foreground">OpenAI API Key</label>
           <div className="flex gap-2">
             <Input
               type="password"
-              placeholder="Enter your Open AI API key"
+              placeholder="Enter your OpenAI API key"
               value={openAIAPIKey}
-              onChange={(e) => setOpenAIAPIKey(e.target.value)}
+              onChange={async (e) => {
+                const newKey = e.target.value;
+                setOpenAIAPIKey(newKey);
+                try {
+                  await window.electronAPI.setOpenAIAPIKey(newKey);
+                  if (newKey.trim()) {
+                    toast.success('OpenAI API key updated');
+                  }
+                } catch (error) {
+                  toast.error('Failed to save API key');
+                  console.error('Error saving API key:', error);
+                }
+              }}
             />
             <Button
               onClick={async () => {
-                const text = await navigator.clipboard.readText();
-                setOpenAIAPIKey(text);
-                await window.electronAPI.setOpenAIAPIKey(text);
-                toast.success('Open AI API key updated');
+                try {
+                  const text = await navigator.clipboard.readText();
+                  if (!text.trim()) {
+                    toast.error('Clipboard is empty');
+                    return;
+                  }
+                  setOpenAIAPIKey(text);
+                  await window.electronAPI.setOpenAIAPIKey(text);
+                  toast.success('OpenAI API key pasted and saved');
+                } catch (error) {
+                  toast.error('Failed to paste or save API key');
+                  console.error('Error with clipboard or saving:', error);
+                }
               }}
             >
               Paste & Save
