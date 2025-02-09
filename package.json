@@ -103,17 +103,36 @@
   },
   "dependencies": {
     "@electron/notarize": "^2.3.2",
+    "@mapbox/node-pre-gyp": "^1.0.11",
+    "@radix-ui/react-collapsible": "^1.1.2",
+    "@radix-ui/react-dialog": "^1.1.4",
+    "@radix-ui/react-dropdown-menu": "^2.1.4",
+    "@radix-ui/react-select": "^2.1.4",
+    "@radix-ui/react-separator": "^1.1.1",
+    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-tooltip": "^1.1.6",
+    "axios": "^1.7.9",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-store": "^10.0.0",
     "electron-updater": "^6.1.4",
     "ffbinaries": "^1.1.5",
     "fluent-ffmpeg": "^2.1.3",
+    "get-windows": "^9.2.0",
+    "lucide-react": "^0.469.0",
     "menubar": "^9.5.1",
+    "next-themes": "^0.4.4",
+    "openai": "^4.78.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-player": "^2.16.0",
     "react-router-dom": "^6.16.0",
-    "screenshot-desktop": "^1.15.1"
+    "screenshot-desktop": "^1.15.1",
+    "sonner": "^1.7.1",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@electron-forge/maker-dmg": "^7.6.0",
@@ -132,6 +151,7 @@
     "@types/webpack-bundle-analyzer": "^4.6.0",
     "@typescript-eslint/eslint-plugin": "^6.7.0",
     "@typescript-eslint/parser": "^6.7.0",
+    "autoprefixer": "^10.4.20",
     "browserslist-config-erb": "^0.0.3",
     "chalk": "^4.1.2",
     "concurrently": "^8.2.1",
@@ -162,6 +182,7 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "mini-css-extract-plugin": "^2.7.6",
+    "postcss-loader": "^8.1.1",
     "prettier": "^3.0.3",
     "react-refresh": "^0.14.0",
     "react-test-renderer": "^18.2.0",
@@ -169,6 +190,7 @@
     "sass": "^1.67.0",
     "sass-loader": "^13.3.2",
     "style-loader": "^3.3.3",
+    "tailwindcss": "^3.4.17",
     "terser-webpack-plugin": "^5.3.9",
     "ts-jest": "^29.1.1",
     "ts-loader": "^9.4.4",
@@ -200,7 +222,9 @@
       {
         "from": "ffmpeg",
         "to": "ffmpeg",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {

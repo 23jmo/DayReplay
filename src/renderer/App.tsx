@@ -1,7 +1,24 @@
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
-import './App.css';
+import { useState, useEffect } from 'react';
+import '../index.css';
 import FrameratePicker from './FrameratePicker';
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+
+import Library from './Library';
+import { AppSidebar } from './components/Sidebar';
+import { Title } from '@radix-ui/react-dialog';
+import Settings from './Settings';
+import RenderLayout from './render-layout';
+import Home from './Home';
 
 declare global {
   interface Window {
@@ -21,131 +38,39 @@ declare global {
   }
 }
 
-function ProfileButton() {
-  return <button className="profile-button">Profile</button>;
-}
-
 function TitleBar() {
   return (
-    <div className="titlebar">
-      <ProfileButton />
+    <div className="app-region-drag h-12 top-0 right-0 left-0 bg-gray-50 position-fixed flex items-center rounded-sm m-1">
+      <p className="text-sm font-semibold text-foreground">Day Replay</p>
     </div>
   );
 }
 
-function Settings() {
-  const [interval, setInterval] = useState(5);
-  const [resolution, setResolution] = useState('1920x1080');
-  const [framerate, setFramerate] = useState(30);
 
-  // Load settings when component mounts
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (!window.electronAPI) {
-        console.error('Electron API not available');
-        return;
-      }
-      const settings = await window.electronAPI.getSettings();
-      setInterval(settings.interval);
-      setResolution(settings.resolution);
-      setFramerate(settings.framerate);
-    };
-    loadSettings();
-  }, []);
-
-  const resolutionOptions = ['1920x1080', '1280x720', '3840x2160'];
-  const frameRateOptions = ['24', '30', '60'];
-  const intervalOptions = ['1', '3', '5', '10', '15', '30'];
-
-  const handleSave = async () => {
-    await window.electronAPI.saveSettings({
-      interval,
-      resolution,
-      framerate,
-    });
-  };
-
-  return (
-    <div className="settings-container">
-      <h2>Settings</h2>
-
-      <div className="setting-group">
-        <label htmlFor="interval">
-          Time between shots (seconds):
-          <select
-            id="interval"
-            value={interval}
-            onChange={(e) => {
-              setInterval(Number(e.target.value));
-              handleSave();
-            }}
-          >
-            {intervalOptions.map((intvl) => (
-              <option key={intvl} value={intvl}>
-                {intvl}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="setting-group">
-        <label htmlFor="resolution">
-          Resolution:
-          <select
-            id="resolution"
-            value={resolution}
-            onChange={(e) => {
-              setResolution(e.target.value);
-              handleSave();
-            }}
-          >
-            {resolutionOptions.map((res) => (
-              <option key={res} value={res}>
-                {res}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="setting-group">
-        <label htmlFor="framerate">
-          Output Framerate:
-          <select
-            id="framerate"
-            value={framerate}
-            onChange={(e) => {
-              setFramerate(Number(e.target.value));
-              handleSave();
-            }}
-          >
-            {frameRateOptions.map((fps) => (
-              <option key={fps} value={fps}>
-                {fps}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   return (
     <>
-      <TitleBar />
-      <Router>
-        <div>
-          <div className="content">
-            <Routes>
-              <Route path="/" element={<Settings />} />
-              <Route path="/frameratePicker" element={<FrameratePicker />} />
-            </Routes>
-          </div>
+    <div className="flex">
+
+      <SidebarProvider>
+      <AppSidebar />
+
+      <main className="w-full">
+        <Router>
+          <Routes>
+            <Route path="/" element={<RenderLayout><Settings /></RenderLayout>} />
+            <Route path="/frameratePicker" element={<RenderLayout><FrameratePicker /></RenderLayout>} />
+            <Route path="/library" element={<RenderLayout noPadding><Library /></RenderLayout>} />
+            <Route path="/home" element={<RenderLayout noPadding><Home /></RenderLayout>} />
+          </Routes>
+        </Router>
+        <div className="absolute bottom-4 left-4">
+          <SidebarTrigger />
         </div>
-      </Router>
+      </main>
+      </SidebarProvider>
+    </div>
     </>
   );
 }

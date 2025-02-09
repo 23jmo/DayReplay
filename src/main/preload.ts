@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+import { DayEntry } from '../shared/types';
 
 
 console.log('🚀 Preload script is running');
@@ -7,6 +8,7 @@ interface Settings {
   interval: number;
   resolution: string;
   framerate: number;
+  loginWindowTimeout: number;
 }
 
 interface ElectronAPI {
@@ -14,6 +16,14 @@ interface ElectronAPI {
   saveSettings: (settings: Settings) => Promise<boolean>;
   sendMessage: (message: string) => void;
   getScreenshotCount: () => Promise<number>;
+  getDays: () => Promise<DayEntry[]>;
+  getVideoUrl: (filePath: string) => Promise<string>;
+  getCustomPrompt: () => Promise<string>;
+  setCustomPrompt: (prompt: string) => Promise<boolean>;
+  showInFinder: (filePath: string) => Promise<void>;
+  shareFile: (filePath: string) => Promise<void>;
+  getOpenAIAPIKey: () => Promise<string>;
+  setOpenAIAPIKey: (key: string) => Promise<boolean>;
 }
 
 declare global {
@@ -34,6 +44,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportRecording: () => ipcRenderer.invoke('recording:export'),
   sendMessage: (message: string) => ipcRenderer.send('message', message),
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
+  getDays: () => ipcRenderer.invoke('days:get'),
+  getVideoUrl: (filePath: string) => ipcRenderer.invoke('get-video-url', filePath),
+  getCustomPrompt: () => ipcRenderer.invoke('custom-prompt:get'),
+  setCustomPrompt: (prompt: string) => ipcRenderer.invoke('custom-prompt:set', prompt),
+  showInFinder: (filePath: string) => ipcRenderer.invoke('show-in-finder', filePath),
+  shareFile: (filePath: string) => ipcRenderer.invoke('share-file', filePath),
+  getOpenAIAPIKey: () => ipcRenderer.invoke('openai-api-key:get'),
+  setOpenAIAPIKey: (key: string) => ipcRenderer.invoke('openai-api-key:set', key),
 });
 
 contextBridge.exposeInMainWorld('electron', {
