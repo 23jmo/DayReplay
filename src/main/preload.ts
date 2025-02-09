@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { DayEntry } from '../shared/types';
 
+
 console.log('🚀 Preload script is running');
 
 interface Settings {
@@ -35,7 +36,7 @@ declare global {
 contextBridge.exposeInMainWorld('electronAPI', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: any) => {
-    console.log('saveSettings', settings);
+    console.info('saveSettings', settings);
     ipcRenderer.invoke('settings:save', settings);
   },
   startRecording: () => ipcRenderer.invoke('recording:start'),
