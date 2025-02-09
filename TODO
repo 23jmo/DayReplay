@@ -12,6 +12,11 @@ AI Features:
   ✔ detect activity changes and mark key frames @done(25-02-05 14:37)
   ✔ review key frames (llm) and get back the activity category and productivity score @done(25-02-05 14:37)
   ☐ Generate a summary of the timelapse as well as a timeline of the day that I can render
+  ☐ Change the Timeline
+    ☐ Tooltip displays downward to show the video better
+    ☐ Either 1: AI generates a description for each website use sesh OR AI smart groups the timestamps and appData into a better json format - then mark each activity with the app icon
+      Ex: this would say like "Cold emailing startups" and I would be on Arc, Notion, even a bit of messages or spotify - but it would smart detect the project section
+      This could expand to auto categorization based on projects that you set 
   ☐ save these stats to the database (firebase)
   ☐ Add a local chromadb or something where I can query
 Analysis/Home Page:
@@ -21,7 +26,7 @@ Analysis/Home Page:
     This should lowkey all be saved to the database (I'm thinking firebase? or maybe supabase or mongo)
 UI Features:
   ☐ Right click menu on the notes sidebar
-    ☐ option to delete the timelapse, export it, idk 
+    ☐ option to delete the timelapse, export it, idk
   ☐ Allow hiding and showing the nodes sidebar
 
 Miscellaneous:

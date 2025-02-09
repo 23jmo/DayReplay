@@ -45,6 +45,11 @@ let isProcessingQueue = false;
 
 // Add at the top with other variables
 let cachedFfmpegPath: string | null = null;
+let windowTrackingErrorCount = 0;
+const MAX_WINDOW_TRACKING_ERRORS = 3;
+let isWindowTrackingBackoff = false;
+let windowTrackingBackoffTimeout: NodeJS.Timeout | null = null;
+let hasShownPermissionDialog = false;
 
 // Export the menu update callback setter
 export function setMenuUpdateCallback(callback: () => void) {
@@ -99,15 +104,20 @@ log.info('__dirname:', __dirname);
 
 // Function to get the current active window info
 async function getActiveWindowInfo(): Promise<AppUsageData | null> {
+  if (isWindowTrackingBackoff) {
+    return null;
+  }
+
   try {
     const activeWinInfo = await activeWindow({
       screenRecordingPermission: true,
       accessibilityPermission: true
     });
 
-    if (!activeWinInfo) return null;
-
-    return {
+    // Reset error count on success
+    windowTrackingErrorCount = 0;
+    hasShownPermissionDialog = false;
+    return activeWinInfo ? {
       appName: activeWinInfo.owner.name,
       title: activeWinInfo.title,
       url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
@@ -118,9 +128,78 @@ async function getActiveWindowInfo(): Promise<AppUsageData | null> {
       startTime: Date.now(),
       endTime: Date.now(),
       duration: 0,
-    };
-  } catch (error) {
-    log.error('Error getting active window:', error);
+    } : null;
+  } catch (error: any) {
+    windowTrackingErrorCount++;
+    log.error(`Error getting active window (attempt ${windowTrackingErrorCount}):`, error);
+
+    // Check if this might be a permissions issue
+    if (error.message?.includes('Command failed') && !hasShownPermissionDialog) {
+      hasShownPermissionDialog = true; // Only show once
+      dialog.showMessageBox({
+        type: 'warning',
+        title: 'Permission Error',
+        message: 'Unable to track active windows',
+        detail: 'This might be caused by missing permissions. Please check:\n\n' +
+                '1. System Settings > Privacy & Security > Accessibility\n' +
+                '2. System Settings > Privacy & Security > Screen Recording\n\n' +
+                'Make sure DayReplay is allowed in both locations. You may need to remove and re-add the permissions.',
+        buttons: ['Open System Settings', 'Cancel'],
+        defaultId: 0
+      }).then(({ response }) => {
+        if (response === 0) {
+          // Open System Preferences to Privacy & Security
+          require('child_process').exec('open x-apple.systempreferences:com.apple.preference.security?Privacy');
+        }
+      });
+
+      // Enter backoff immediately for permission issues
+      isWindowTrackingBackoff = true;
+      if (appTrackingInterval) {
+        clearInterval(appTrackingInterval);
+        appTrackingInterval = null;
+      }
+
+      // Set a longer timeout for permission issues
+      if (windowTrackingBackoffTimeout) {
+        clearTimeout(windowTrackingBackoffTimeout);
+      }
+      windowTrackingBackoffTimeout = setTimeout(() => {
+        log.info('Attempting to resume window tracking after permission error');
+        isWindowTrackingBackoff = false;
+        windowTrackingErrorCount = 0;
+        if (isAutoRecordingEnabled && !appTrackingInterval) {
+          appTrackingInterval = setInterval(trackAppChange, 1000);
+        }
+      }, 300000); // 5 minute backoff for permission issues
+
+      return null;
+    }
+
+    // If we've hit the error threshold, implement backoff
+    if (windowTrackingErrorCount >= MAX_WINDOW_TRACKING_ERRORS) {
+      log.warn('Too many window tracking errors, implementing backoff');
+      isWindowTrackingBackoff = true;
+
+      // Clear existing app tracking interval
+      if (appTrackingInterval) {
+        clearInterval(appTrackingInterval);
+        appTrackingInterval = null;
+      }
+
+      // Set a timeout to retry after 1 minute
+      if (windowTrackingBackoffTimeout) {
+        clearTimeout(windowTrackingBackoffTimeout);
+      }
+      windowTrackingBackoffTimeout = setTimeout(() => {
+        log.info('Attempting to resume window tracking after backoff');
+        isWindowTrackingBackoff = false;
+        windowTrackingErrorCount = 0;
+        if (isAutoRecordingEnabled && !appTrackingInterval) {
+          appTrackingInterval = setInterval(trackAppChange, 1000);
+        }
+      }, 60000); // 1 minute backoff
+    }
     return null;
   }
 }
@@ -291,6 +370,13 @@ function resetAppTracking() {
     clearInterval(appTrackingInterval);
     appTrackingInterval = null;
   }
+  if (windowTrackingBackoffTimeout) {
+    clearTimeout(windowTrackingBackoffTimeout);
+    windowTrackingBackoffTimeout = null;
+  }
+  isWindowTrackingBackoff = false;
+  windowTrackingErrorCount = 0;
+  hasShownPermissionDialog = false;
   currentApp = null;
   appUsageData = [];
   loginWindowStartTime = null;
@@ -298,7 +384,6 @@ function resetAppTracking() {
     clearTimeout(loginWindowTimer);
     loginWindowTimer = null;
   }
-
 }
 
 //--------------Auto Recording Logic--------------------------------
@@ -357,22 +442,20 @@ async function checkAndAutoStartRecording(tray: Tray | null) {
  * @param enabled
  */
 export function setAutoRecording(enabled: boolean) {
-
   isAutoRecordingEnabled = enabled;
   //@ts-ignore
   settingsStore.set('autoRecord', enabled);
 
-  if (enabled && !appTrackingInterval) {
+  if (enabled && !appTrackingInterval && !isWindowTrackingBackoff) {
     // Start tracking app changes to detect activity
     appTrackingInterval = setInterval(trackAppChange, 1000);
     log.info('Started app tracking for auto-recording');
     if (appTray) {
       checkAndAutoStartRecording(appTray);
     }
-  } else if (!enabled && appTrackingInterval) {
-    // Stop tracking app changes
-    clearInterval(appTrackingInterval);
-    appTrackingInterval = null;
+  } else if (!enabled) {
+    // Stop tracking app changes and clear all related state
+    resetAppTracking();
     log.info('Stopped app tracking');
   }
 }
