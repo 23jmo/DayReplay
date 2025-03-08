@@ -16,11 +16,21 @@ import type { Menubar } from 'menubar';
 
 import { autoUpdater } from 'electron-updater';
 import path from 'node:path';
-import { resolveHtmlPath, startRecording, pauseRecording, exportRecordingWithUserPath, resumeRecording, getRecordingStats, setAutoRecording, getAutoRecording, getRecordingState, setMenuUpdateCallback } from './util';
+import {
+  resolveHtmlPath,
+  startRecording,
+  pauseRecording,
+  exportRecordingWithUserPath,
+  resumeRecording,
+  getRecordingStats,
+  setAutoRecording,
+  getAutoRecording,
+  getRecordingState,
+  setMenuUpdateCallback,
+} from './util';
 
 import { settingsStore } from './store';
 import { TrayIcons, MenuIcons } from './assets';
-
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -28,7 +38,6 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 }
 
 export default class MenuBuilder {
-
   private screenshotCount = 0;
 
   private checkForUpdatesMenuItem: MenuItem;
@@ -136,7 +145,6 @@ export default class MenuBuilder {
       resolution: settingsStore.get('resolution'),
     };
 
-
     const menuItems: MenuItemConstructorOptions[] = [];
 
     if (getRecordingState().isRecording) {
@@ -159,15 +167,19 @@ export default class MenuBuilder {
         click: () => {
           setAutoRecording(!getAutoRecording());
           this.tray.setContextMenu(this.buildMenu());
-        }
+        },
       },
       {
         label: getRecordingState().isRecording
-          ? (getRecordingState().isPaused ? 'Resume Recording' : 'Stop Recording')
+          ? getRecordingState().isPaused
+            ? 'Resume Recording'
+            : 'Stop Recording'
           : 'Start Recording',
         click: () => {
           if (!getRecordingState().isRecording) {
-            if (startRecording(settings.interval, settings.resolution, this.tray)) {
+            if (
+              startRecording(settings.interval, settings.resolution, this.tray)
+            ) {
               this.startStatsUpdate(settings.interval);
             }
           } else if (getRecordingState().isPaused) {
@@ -207,22 +219,26 @@ export default class MenuBuilder {
             this.tray.setContextMenu(this.buildMenu());
           });
 
-          pickerWindow.loadURL(resolveHtmlPath('index.html') + '#/frameratePicker');
+          pickerWindow.loadURL(
+            resolveHtmlPath('index.html') + '#/frameratePicker',
+          );
           pickerWindow.once('ready-to-show', () => {
             pickerWindow.show();
           });
         },
         accelerator: 'CommandOrControl+E',
-        enabled: getRecordingState().isRecording && getRecordingState().isPaused,
+        enabled:
+          getRecordingState().isRecording && getRecordingState().isPaused,
       },
       { type: 'separator' as const },
       {
         label: 'Open Library',
         click: () => {
           if (this.browserWindow) {
-
             this.browserWindow.focus();
-             this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/library');
+            this.browserWindow.loadURL(
+              resolveHtmlPath('index.html') + '#/library',
+            );
             return;
           }
 
@@ -242,12 +258,14 @@ export default class MenuBuilder {
             },
           });
 
-          this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/library');
+          this.browserWindow.loadURL(
+            resolveHtmlPath('index.html') + '#/library',
+          );
 
           this.browserWindow.on('closed', () => {
             this.browserWindow = null;
           });
-        }
+        },
       },
       {
         label: 'Settings',
@@ -255,7 +273,7 @@ export default class MenuBuilder {
         click: () => {
           if (this.browserWindow) {
             this.browserWindow.focus();
-            this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/')
+            this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/');
             return;
           }
 
@@ -276,9 +294,12 @@ export default class MenuBuilder {
           });
 
           // Add error handler
-          this.browserWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-            console.error('Failed to load:', errorDescription);
-          });
+          this.browserWindow.webContents.on(
+            'did-fail-load',
+            (event, errorCode, errorDescription) => {
+              console.error('Failed to load:', errorDescription);
+            },
+          );
 
           this.browserWindow.loadURL(resolveHtmlPath('index.html') + '#/');
 
@@ -316,25 +337,25 @@ export default class MenuBuilder {
         ...this.checkForUpdatesMenuItem,
         click: (menuItem, window, event) => {
           this.checkForUpdatesMenuItem.click();
-        }
+        },
       },
       {
         ...this.updateAvailableMenuItem,
         click: (menuItem, window, event) => {
           this.updateAvailableMenuItem.click();
-        }
+        },
       },
       {
         ...this.updateReadyForInstallMenuItem,
         click: (menuItem, window, event) => {
           this.updateReadyForInstallMenuItem.click();
-        }
+        },
       },
       {
         ...this.aboutMenuItem,
         click: (menuItem, window, event) => {
           this.aboutMenuItem.click();
-        }
+        },
       },
       {
         label: 'Quit DayReplay',
@@ -342,7 +363,7 @@ export default class MenuBuilder {
         click: () => {
           app.quit();
         },
-      }
+      },
     );
 
     return Menu.buildFromTemplate(menuItems);
@@ -368,6 +389,4 @@ export default class MenuBuilder {
   isUpdateAvailableMenuVisible() {
     return this.updateAvailableMenuItem.visible;
   }
-
 }
-

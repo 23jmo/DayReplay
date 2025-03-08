@@ -27,11 +27,22 @@ const DayView = ({ day, children }: DayViewProps) => {
   useEffect(() => {
     const loadVideo = async () => {
       try {
-        const url = await window.electronAPI.getVideoUrl(day.videoPath);
-        if (!url) {
+        if (!day.videoPath) {
+          console.error('Video path is missing from day entry');
           setError('Video file not found');
           return;
         }
+
+        console.log('Loading video from path:', day.videoPath);
+        const url = await window.electronAPI.getVideoUrl(day.videoPath);
+
+        if (!url) {
+          console.error('Failed to get video URL for path:', day.videoPath);
+          setError('Video file not found');
+          return;
+        }
+
+        console.log('Video URL loaded:', url);
         setVideoUrl(url);
         setError('');
       } catch (err) {
@@ -113,9 +124,98 @@ const DayView = ({ day, children }: DayViewProps) => {
               width="100%"
               height="100%"
               className="absolute inset-0 w-full h-full object-contain"
+              playing={true}
+              playsinline={true}
+              onReady={() => {
+                console.log('Video is ready to play');
+                // Clear any previous errors when video is ready
+                setError('');
+              }}
+              onStart={() => console.log('Video started playing')}
+              onBuffer={() => console.log('Video is buffering')}
               onError={(e) => {
-                console.error('Video error:', e);
-                setError('Error playing video');
+                console.error('Video playback error:', e);
+                // Try to determine the specific error
+                if (e && typeof e === 'object' && 'target' in e) {
+                  const target = e.target as HTMLVideoElement;
+                  if (target && target.error) {
+                    console.error(
+                      'Video element error:',
+                      target.error.code,
+                      target.error.message,
+                    );
+
+                    // Handle specific error codes
+                    switch (target.error.code) {
+                      case 1: // MEDIA_ERR_ABORTED
+                        setError('Video playback was aborted');
+                        break;
+                      case 2: // MEDIA_ERR_NETWORK
+                        setError(
+                          'Network error occurred while loading the video',
+                        );
+                        break;
+                      case 3: // MEDIA_ERR_DECODE
+                        setError(
+                          'Video decoding error - the file may be corrupted',
+                        );
+                        break;
+                      case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                        setError(
+                          'Video format is not supported - trying to reload',
+                        );
+                        // Try to reload with a slight delay
+                        setTimeout(() => {
+                          console.log('Attempting to reload video...');
+                          setVideoUrl('');
+                          setTimeout(async () => {
+                            try {
+                              console.log(
+                                'Fetching video URL again for:',
+                                day.videoPath,
+                              );
+                              const url = await window.electronAPI.getVideoUrl(
+                                day.videoPath,
+                              );
+                              if (url) {
+                                console.log('New video URL:', url);
+                                setVideoUrl(url);
+                              } else {
+                                setError('Could not reload video');
+                              }
+                            } catch (err) {
+                              console.error('Error reloading video:', err);
+                              setError('Error reloading video');
+                            }
+                          }, 500);
+                        }, 1000);
+                        break;
+                      default:
+                        setError('Error playing video');
+                    }
+                  } else {
+                    setError('Error playing video');
+                  }
+                } else {
+                  setError('Error playing video');
+                }
+              }}
+              config={{
+                file: {
+                  attributes: {
+                    controlsList: 'nodownload',
+                    disablePictureInPicture: true,
+                    playsInline: true,
+                    preload: 'auto',
+                  },
+                  forceVideo: true,
+                  forceHLS: false,
+                  forceDASH: false,
+                  hlsOptions: {
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                  },
+                },
               }}
             />
           ) : (

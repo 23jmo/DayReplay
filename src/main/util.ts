@@ -982,7 +982,13 @@ export async function exportRecordingToPath(
         '-pix_fmt',
         'yuv420p',
         '-preset',
-        'medium',
+        'ultrafast', // Use ultrafast preset for better compatibility
+        '-movflags',
+        '+faststart', // Optimize for web playback
+        '-profile:v',
+        'baseline', // Use baseline profile for maximum compatibility
+        '-level',
+        '3.0', // Set level for compatibility
         '-y',
         '-framerate',
         fps.toString(),

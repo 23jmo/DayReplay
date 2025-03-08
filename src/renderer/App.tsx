@@ -66,6 +66,14 @@ export default function App() {
               <Routes>
                 {/* Public routes */}
                 <Route path="/login" element={<Login />} />
+                <Route
+                  path="/frameratePicker"
+                  element={
+                    <RenderLayout>
+                      <FrameratePicker />
+                    </RenderLayout>
+                  }
+                />
 
                 {/* Redirect root to home */}
                 <Route path="/" element={<Navigate to="/home" replace />} />
@@ -77,16 +85,6 @@ export default function App() {
                     <ProtectedRoute>
                       <RenderLayout>
                         <Settings />
-                      </RenderLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/frameratePicker"
-                  element={
-                    <ProtectedRoute>
-                      <RenderLayout>
-                        <FrameratePicker />
                       </RenderLayout>
                     </ProtectedRoute>
                   }

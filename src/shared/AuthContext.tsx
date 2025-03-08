@@ -1,16 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
-  User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  Auth,
   getFirebaseAuth,
   initializeFirebase,
   signInWithGoogle,
 } from './firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { User, Auth } from 'firebase/auth';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -68,7 +67,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setCurrentUser(user);
       setLoading(false);
 
-      // Redirect to home page if user is logged in and on login page
+      // Redirect to home page if user is logged in and on login or root page
+      // Skip redirect for other pages like frameratePicker
       if (
         user &&
         (location.pathname === '/login' || location.pathname === '/')

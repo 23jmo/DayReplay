@@ -5,8 +5,6 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User,
-  Auth,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
@@ -14,8 +12,14 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   setPersistence,
+  Auth,
+  UserCredential,
+  type User,
 } from 'firebase/auth';
 import { app as electronApp } from 'electron';
+
+// Re-export the Auth and User types
+export type { Auth, User };
 
 // Default empty config
 const defaultConfig = {
@@ -179,8 +183,6 @@ export {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  User,
-  Auth,
   GoogleAuthProvider,
 };
 

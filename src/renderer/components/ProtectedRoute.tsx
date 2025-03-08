@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../shared/AuthContext';
 
 interface ProtectedRouteProps {
@@ -8,6 +8,12 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { currentUser, loading, initialized } = useAuth();
+  const location = useLocation();
+
+  // Allow direct access to frameratePicker regardless of auth status
+  if (location.pathname === '/frameratePicker') {
+    return <>{children}</>;
+  }
 
   // Show loading state while authentication is being checked
   if (loading) {

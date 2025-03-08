@@ -37,6 +37,7 @@ import {
   setTray,
   processExportQueue,
   clearExportQueue,
+  exportRecordingWithUserPath,
 } from './util';
 import {
   daysStore,
@@ -144,10 +145,55 @@ ipcMain.handle('settings:get', async () => {
 ipcMain.handle('get-video-url', async (_, filePath) => {
   try {
     // Check if file exists
-    await fs.promises.access(filePath, fs.constants.F_OK);
-    return `local-file://${filePath}`;
+    if (!filePath) {
+      log.error('Invalid file path: path is empty or undefined');
+      return null;
+    }
+
+    // Log the file path for debugging
+    log.info('Attempting to access video file at:', filePath);
+
+    // Check file existence
+    try {
+      await fs.promises.access(filePath, fs.constants.F_OK);
+    } catch (error) {
+      log.error(`File access error for ${filePath}:`, error);
+      return null;
+    }
+
+    // Check file stats to ensure it's a valid file
+    try {
+      const stats = await fs.promises.stat(filePath);
+      if (!stats.isFile()) {
+        log.error(`Path exists but is not a file: ${filePath}`);
+        return null;
+      }
+
+      if (stats.size === 0) {
+        log.error(`File exists but is empty: ${filePath}`);
+        return null;
+      }
+
+      log.info(`File stats for ${filePath}:`, {
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+      });
+    } catch (error) {
+      log.error(`File stat error for ${filePath}:`, error);
+      return null;
+    }
+
+    // Return the URL with the local-file protocol
+    // Make sure the path is properly encoded for the URL
+    const encodedPath = encodeURI(filePath)
+      .replace(/#/g, '%23')
+      .replace(/\\/g, '/');
+    const url = `local-file://${encodedPath}`;
+    log.info('Video URL created:', url);
+    return url;
   } catch (error) {
-    console.error('Error accessing video file:', error);
+    log.error('Error accessing video file:', error);
     return null;
   }
 });
@@ -270,6 +316,243 @@ ipcMain.handle('open-external-auth', async (_, provider: string) => {
   }
 });
 
+/**
+ * Add event listeners...
+ */
+
+app.on('window-all-closed', () => {
+  // Respect the OSX convention of having the application in memory even
+  // after all windows have been closed
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+let isQuitting = false;
+
+app.on('before-quit', async (event) => {
+  if (isQuitting) return; // Prevent infinite loop
+
+  event.preventDefault();
+  isQuitting = true;
+
+  try {
+    await clearExportQueue();
+    log.info('Export queue cleared before quit');
+  } catch (error) {
+    log.error('Failed to clear export queue before quit:', error);
+  } finally {
+    // Use process.exit to ensure clean exit
+    process.exit(0);
+  }
+});
+
+app
+  .whenReady()
+  .then(async () => {
+    console.log('app ready');
+    log.info('Creating tray with icon:', TrayIcons.default);
+
+    try {
+      log.info('App is packaged:', app.isPackaged);
+      log.info('Resources path:', process.resourcesPath);
+      log.info('App path:', app.getAppPath());
+      log.info('Looking for tray icon at:', TrayIcons.default);
+
+      // Clear any leftover export queue from previous session
+      await clearExportQueue().catch((error) => {
+        log.error('Failed to clear export queue:', error);
+      });
+
+      if (!fs.existsSync(TrayIcons.default)) {
+        log.error('Tray icon not found!');
+        // List the contents of the assets directory
+        const assetsDir = path.dirname(path.dirname(TrayIcons.default));
+        log.info('Contents of assets directory:', fs.readdirSync(assetsDir));
+        throw new Error(`Tray icon not found at ${TrayIcons.default}`);
+      }
+
+      log.info('Tray icon found, creating tray...');
+      const tray = new Tray(TrayIcons.default);
+      const menuBuilder = new MenuBuilder(tray);
+      const contextMenu = menuBuilder.buildMenu();
+      tray.setContextMenu(contextMenu);
+
+      // Set the tray reference first
+      setTray(tray);
+
+      // Then initialize auto-recording from saved settings
+      const autoRecordEnabled = getAutoRecording();
+      if (autoRecordEnabled) {
+        log.info('Auto-recording was enabled, starting app tracking...');
+        setAutoRecording(true); // This will start app tracking and check for activity
+      }
+
+      log.info('Tray created successfully');
+
+      // Add direct export IPC handler with access to tray
+      ipcMain.handle('recording:export-direct', async (_, fps = 30) => {
+        try {
+          log.info('Direct export requested with FPS:', fps);
+          await exportRecordingWithUserPath(tray, fps);
+          return { success: true };
+        } catch (error) {
+          log.error('Error during direct export:', error);
+          return { success: false, error: String(error) };
+        }
+      });
+
+      const mb = menubar({
+        tray,
+        index: resolveHtmlPath('index.html'),
+        preloadWindow: true,
+        showDockIcon: false,
+        browserWindow: {
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+            preload: app.isPackaged
+              ? path.join(__dirname, 'preload.js')
+              : path.join(__dirname, '../../.erb/dll/preload.js'),
+          },
+        },
+      });
+
+      mb.on('ready', () => {
+        log.info('Menubar is ready');
+        mb.tray.removeAllListeners();
+
+        mb.tray.setToolTip('DayReplay');
+        mb.tray.setIgnoreDoubleClickEvents(true);
+
+        mb.hideWindow();
+
+        mb.tray.on('right-click', (_event, bounds) => {
+          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+        });
+        mb.tray.on('click', (_event, bounds) => {
+          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
+        });
+
+        log.info('Menubar setup complete');
+        Menu.setApplicationMenu(contextMenu);
+      });
+
+      mb.on('after-create-window', () => {
+        log.info('Menubar window created');
+      });
+
+      mb.on('after-show', () => {
+        log.info('Menubar window shown');
+      });
+
+      mb.on('after-hide', () => {
+        log.info('Menubar window hidden');
+      });
+    } catch (error) {
+      log.error('Failed to create tray:', error);
+      dialog.showErrorBox(
+        'Failed to create tray',
+        'The application failed to start properly. Please try reinstalling the app.',
+      );
+      app.quit();
+    }
+
+    // Remove the initial permission check since it's not reliable
+    // We'll check permissions when we actually try to take screenshots
+  })
+  .catch((error) => {
+    log.error('Error in app.whenReady:', error);
+  });
+
+app.whenReady().then(() => {
+  // Register protocol handler
+  protocol.registerFileProtocol('local-file', (request, callback) => {
+    try {
+      const filePath = request.url.replace('local-file://', '');
+
+      // Create a proper file path that Electron can understand
+      const decodedPath = decodeURIComponent(filePath);
+      log.info('Protocol handler processing request for:', decodedPath);
+
+      // Check if file exists
+      if (!fs.existsSync(decodedPath)) {
+        log.error('Protocol handler: File does not exist:', decodedPath);
+        callback({ error: -6 /* FILE_NOT_FOUND */ });
+        return;
+      }
+
+      // Check if it's a file and not a directory
+      try {
+        const stats = fs.statSync(decodedPath);
+        if (!stats.isFile()) {
+          log.error('Protocol handler: Path is not a file:', decodedPath);
+          callback({ error: -6 /* FILE_NOT_FOUND */ });
+          return;
+        }
+
+        // Log file details for debugging
+        log.info('Protocol handler: File details:', {
+          path: decodedPath,
+          size: stats.size,
+          modified: stats.mtime,
+        });
+      } catch (statError) {
+        log.error('Protocol handler: Error checking file stats:', statError);
+        callback({ error: -2 /* FAILED */ });
+        return;
+      }
+
+      // Log successful access
+      log.info('Protocol handler: Successfully accessing file:', decodedPath);
+      callback({ path: decodedPath });
+    } catch (error) {
+      log.error('Protocol handler error:', error);
+      callback({ error: -2 /* FAILED */ });
+    }
+  });
+});
+
+ipcMain.on('window-controls', (_, command) => {
+  const window = BrowserWindow.getFocusedWindow();
+  if (!window) return;
+
+  switch (command) {
+    case 'minimize':
+      window.minimize();
+      break;
+    case 'maximize':
+      if (window.isMaximized()) {
+        window.unmaximize();
+      } else {
+        window.maximize();
+      }
+      break;
+    case 'close':
+      window.close();
+      break;
+  }
+});
+
+app.on('ready', () => {
+  // Set up CSP
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // Get the port from environment or use default
+    const port = process.env.PORT || '1212';
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          `default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self' blob: local-file:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.firebaseauth.com https://*.identitytoolkit.googleapis.com https://*.cloudfunctions.net https://*.gstatic.com http://localhost:${port} http://localhost:8000; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com;`,
+        ],
+      },
+    });
+  });
+});
+
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
@@ -365,188 +648,3 @@ const installExtensions = async () => {
 //   // eslint-disable-next-line
 //   new AppUpdater();
 // };
-/**
- * Add event listeners...
- */
-
-app.on('window-all-closed', () => {
-  // Respect the OSX convention of having the application in memory even
-  // after all windows have been closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-let isQuitting = false;
-
-app.on('before-quit', async (event) => {
-  if (isQuitting) return; // Prevent infinite loop
-
-  event.preventDefault();
-  isQuitting = true;
-
-  try {
-    await clearExportQueue();
-    log.info('Export queue cleared before quit');
-  } catch (error) {
-    log.error('Failed to clear export queue before quit:', error);
-  } finally {
-    // Use process.exit to ensure clean exit
-    process.exit(0);
-  }
-});
-
-app
-  .whenReady()
-  .then(async () => {
-    console.log('app ready');
-    log.info('Creating tray with icon:', TrayIcons.default);
-
-    try {
-      log.info('App is packaged:', app.isPackaged);
-      log.info('Resources path:', process.resourcesPath);
-      log.info('App path:', app.getAppPath());
-      log.info('Looking for tray icon at:', TrayIcons.default);
-
-      // Clear any leftover export queue from previous session
-      await clearExportQueue().catch((error) => {
-        log.error('Failed to clear export queue:', error);
-      });
-
-      if (!fs.existsSync(TrayIcons.default)) {
-        log.error('Tray icon not found!');
-        // List the contents of the assets directory
-        const assetsDir = path.dirname(path.dirname(TrayIcons.default));
-        log.info('Contents of assets directory:', fs.readdirSync(assetsDir));
-        throw new Error(`Tray icon not found at ${TrayIcons.default}`);
-      }
-
-      log.info('Tray icon found, creating tray...');
-      const tray = new Tray(TrayIcons.default);
-      const menuBuilder = new MenuBuilder(tray);
-      const contextMenu = menuBuilder.buildMenu();
-      tray.setContextMenu(contextMenu);
-
-      // Set the tray reference first
-      setTray(tray);
-
-      // Then initialize auto-recording from saved settings
-      const autoRecordEnabled = getAutoRecording();
-      if (autoRecordEnabled) {
-        log.info('Auto-recording was enabled, starting app tracking...');
-        setAutoRecording(true); // This will start app tracking and check for activity
-      }
-
-      log.info('Tray created successfully');
-
-      const mb = menubar({
-        tray,
-        index: resolveHtmlPath('index.html'),
-        preloadWindow: true,
-        showDockIcon: false,
-        browserWindow: {
-          webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            webSecurity: true,
-            allowRunningInsecureContent: false,
-            preload: app.isPackaged
-              ? path.join(__dirname, 'preload.js')
-              : path.join(__dirname, '../../.erb/dll/preload.js'),
-          },
-        },
-      });
-
-      mb.on('ready', () => {
-        log.info('Menubar is ready');
-        mb.tray.removeAllListeners();
-
-        mb.tray.setToolTip('DayReplay');
-        mb.tray.setIgnoreDoubleClickEvents(true);
-
-        mb.hideWindow();
-
-        mb.tray.on('right-click', (_event, bounds) => {
-          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
-        });
-        mb.tray.on('click', (_event, bounds) => {
-          mb.tray.popUpContextMenu(contextMenu, { x: bounds.x, y: bounds.y });
-        });
-
-        log.info('Menubar setup complete');
-        Menu.setApplicationMenu(contextMenu);
-      });
-
-      mb.on('after-create-window', () => {
-        log.info('Menubar window created');
-      });
-
-      mb.on('after-show', () => {
-        log.info('Menubar window shown');
-      });
-
-      mb.on('after-hide', () => {
-        log.info('Menubar window hidden');
-      });
-    } catch (error) {
-      log.error('Failed to create tray:', error);
-      dialog.showErrorBox(
-        'Failed to create tray',
-        'The application failed to start properly. Please try reinstalling the app.',
-      );
-      app.quit();
-    }
-
-    // Remove the initial permission check since it's not reliable
-    // We'll check permissions when we actually try to take screenshots
-  })
-  .catch((error) => {
-    log.error('Error in app.whenReady:', error);
-  });
-
-app.whenReady().then(() => {
-  // Register protocol handler
-  protocol.registerFileProtocol('local-file', (request, callback) => {
-    const filePath = request.url.replace('local-file://', '');
-    try {
-      return callback(decodeURIComponent(filePath));
-    } catch (error) {
-      console.error(error);
-    }
-  });
-});
-
-ipcMain.on('window-controls', (_, command) => {
-  const window = BrowserWindow.getFocusedWindow();
-  if (!window) return;
-
-  switch (command) {
-    case 'minimize':
-      window.minimize();
-      break;
-    case 'maximize':
-      if (window.isMaximized()) {
-        window.unmaximize();
-      } else {
-        window.maximize();
-      }
-      break;
-    case 'close':
-      window.close();
-      break;
-  }
-});
-
-app.on('ready', () => {
-  // Set up CSP
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' file: data: blob: local-file: http://localhost:8000; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' file: data: blob: local-file: https://*.googleusercontent.com; media-src 'self' file: blob: local-file:; connect-src 'self' http://localhost:8000 https://*.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.firebaseauth.com https://*.identitytoolkit.googleapis.com https://*.cloudfunctions.net https://*.gstatic.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com;",
-        ],
-      },
-    });
-  });
-});

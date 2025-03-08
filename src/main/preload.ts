@@ -25,6 +25,9 @@ interface ElectronAPI {
   setOpenAIAPIKey: (key: string) => Promise<boolean>;
   getSecureConfig: (configName: string) => Promise<any>;
   openExternalAuth: (provider: string) => Promise<any>;
+  exportRecordingDirect: (
+    fps?: number,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
@@ -42,6 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startRecording: () => ipcRenderer.invoke('recording:start'),
   pauseRecording: () => ipcRenderer.invoke('recording:pause'),
   exportRecording: () => ipcRenderer.invoke('recording:export'),
+  exportRecordingDirect: (fps = 30) =>
+    ipcRenderer.invoke('recording:export-direct', fps),
   sendMessage: (message: string) => ipcRenderer.send('message', message),
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
   getDays: () => ipcRenderer.invoke('days:get'),
