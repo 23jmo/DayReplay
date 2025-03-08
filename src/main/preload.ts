@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { DayEntry } from '../shared/types';
 
-
 console.log('🚀 Preload script is running');
 
 interface Settings {
@@ -24,12 +23,13 @@ interface ElectronAPI {
   shareFile: (filePath: string) => Promise<void>;
   getOpenAIAPIKey: () => Promise<string>;
   setOpenAIAPIKey: (key: string) => Promise<boolean>;
+  getSecureConfig: (configName: string) => Promise<any>;
+  openExternalAuth: (provider: string) => Promise<any>;
 }
 
 declare global {
   interface Window {
     electronAPI: ElectronAPI;
-
   }
 }
 
@@ -45,13 +45,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendMessage: (message: string) => ipcRenderer.send('message', message),
   getScreenshotCount: () => ipcRenderer.invoke('screenshots-taken'),
   getDays: () => ipcRenderer.invoke('days:get'),
-  getVideoUrl: (filePath: string) => ipcRenderer.invoke('get-video-url', filePath),
+  getVideoUrl: (filePath: string) =>
+    ipcRenderer.invoke('get-video-url', filePath),
   getCustomPrompt: () => ipcRenderer.invoke('custom-prompt:get'),
-  setCustomPrompt: (prompt: string) => ipcRenderer.invoke('custom-prompt:set', prompt),
-  showInFinder: (filePath: string) => ipcRenderer.invoke('show-in-finder', filePath),
+  setCustomPrompt: (prompt: string) =>
+    ipcRenderer.invoke('custom-prompt:set', prompt),
+  showInFinder: (filePath: string) =>
+    ipcRenderer.invoke('show-in-finder', filePath),
   shareFile: (filePath: string) => ipcRenderer.invoke('share-file', filePath),
   getOpenAIAPIKey: () => ipcRenderer.invoke('openai-api-key:get'),
-  setOpenAIAPIKey: (key: string) => ipcRenderer.invoke('openai-api-key:set', key),
+  setOpenAIAPIKey: (key: string) =>
+    ipcRenderer.invoke('openai-api-key:set', key),
+  getSecureConfig: (configName: string) =>
+    ipcRenderer.invoke('get-secure-config', configName),
+  openExternalAuth: (provider: string) =>
+    ipcRenderer.invoke('open-external-auth', provider),
 });
 
 contextBridge.exposeInMainWorld('electron', {

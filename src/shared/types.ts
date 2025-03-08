@@ -11,6 +11,7 @@ export type DayEntry = {
   thumbnailPath: string;
   tags: string[];
   appUsage?: AppUsageData[];
+  description: string;
 };
 
 export interface Entry {
@@ -20,10 +21,10 @@ export interface Entry {
 
 export interface AppUsageData {
   appName: string;
-  title?: string;  // Window title
-  url?: string;    // URL if it's a browser window
+  title?: string; // Window title
+  url?: string; // URL if it's a browser window
   owner: {
-    name: string;  // Process name
+    name: string; // Process name
     path?: string; // Path to the executable
   };
   startTime: number;
@@ -31,5 +32,3 @@ export interface AppUsageData {
   duration: number;
   category?: string;
 }
-
-

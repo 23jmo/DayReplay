@@ -1,17 +1,22 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import {
+  HashRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import '../index.css';
 import FrameratePicker from './FrameratePicker';
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 import Library from './Library';
 import { AppSidebar } from './components/Sidebar';
@@ -19,6 +24,9 @@ import { Title } from '@radix-ui/react-dialog';
 import Settings from './Settings';
 import RenderLayout from './render-layout';
 import Home from './Home';
+import Login from './components/Login';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider } from '../shared/AuthContext';
 
 declare global {
   interface Window {
@@ -46,31 +54,74 @@ function TitleBar() {
   );
 }
 
-
-
 export default function App() {
   return (
-    <>
-    <div className="flex">
+    <Router>
+      <AuthProvider>
+        <div className="flex">
+          <SidebarProvider>
+            <AppSidebar />
 
-      <SidebarProvider>
-      <AppSidebar />
+            <main className="w-full">
+              <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<Login />} />
 
-      <main className="w-full">
-        <Router>
-          <Routes>
-            <Route path="/" element={<RenderLayout><Settings /></RenderLayout>} />
-            <Route path="/frameratePicker" element={<RenderLayout><FrameratePicker /></RenderLayout>} />
-            <Route path="/library" element={<RenderLayout noPadding><Library /></RenderLayout>} />
-            <Route path="/home" element={<RenderLayout noPadding><Home /></RenderLayout>} />
-          </Routes>
-        </Router>
-        <div className="absolute bottom-4 left-4">
-          <SidebarTrigger />
+                {/* Redirect root to home */}
+                <Route path="/" element={<Navigate to="/home" replace />} />
+
+                {/* Protected routes */}
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <RenderLayout>
+                        <Settings />
+                      </RenderLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/frameratePicker"
+                  element={
+                    <ProtectedRoute>
+                      <RenderLayout>
+                        <FrameratePicker />
+                      </RenderLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/library"
+                  element={
+                    <ProtectedRoute>
+                      <RenderLayout noPadding>
+                        <Library />
+                      </RenderLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/home"
+                  element={
+                    <ProtectedRoute>
+                      <RenderLayout noPadding>
+                        <Home />
+                      </RenderLayout>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Fallback route */}
+                <Route path="*" element={<Navigate to="/home" replace />} />
+              </Routes>
+              <div className="absolute bottom-4 left-4">
+                <SidebarTrigger />
+              </div>
+            </main>
+          </SidebarProvider>
         </div>
-      </main>
-      </SidebarProvider>
-    </div>
-    </>
+      </AuthProvider>
+    </Router>
   );
 }

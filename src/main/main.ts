@@ -11,18 +11,86 @@
 
 import path from 'path';
 import fs from 'fs';
-import { app, BrowserWindow, Menu, ipcMain, Tray, dialog, systemPreferences, session, protocol, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  ipcMain,
+  Tray,
+  dialog,
+  systemPreferences,
+  session,
+  protocol,
+  shell,
+} from 'electron';
 
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { menubar } from 'menubar';
 
 import MenuBuilder from './menu';
-import { getRecordingStats, resolveHtmlPath, setAutoRecording, getAutoRecording, setTray, processExportQueue, clearExportQueue } from './util';
-import { daysStore, settingsStore, customPromptStore, openAIAPIKeyStore } from './store';
+import {
+  getRecordingStats,
+  resolveHtmlPath,
+  setAutoRecording,
+  getAutoRecording,
+  setTray,
+  processExportQueue,
+  clearExportQueue,
+} from './util';
+import {
+  daysStore,
+  settingsStore,
+  customPromptStore,
+  openAIAPIKeyStore,
+} from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
 
+// Add this near the top of the imports
+// import { ipcMain } from 'electron';
+
+// Add this after other initialization code but before app.on('ready')
+// Secure configuration handler
+const secureConfigs = {
+  firebase: {
+    apiKey: process.env.FIREBASE_API_KEY || '',
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+    appId: process.env.FIREBASE_APP_ID || '',
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID || '',
+  },
+};
+
+// Try to load from .env file in development
+if (process.env.NODE_ENV === 'development') {
+  try {
+    const envPath = path.join(__dirname, '../../.env');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const envVars = envContent.split('\n').reduce(
+        (acc, line) => {
+          const match = line.match(/^FIREBASE_([A-Z_]+)=(.+)$/);
+          if (match) {
+            const key = match[1]
+              .toLowerCase()
+              .replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+            acc[key] = match[2].trim();
+          }
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
+
+      // Update config with values from .env
+      Object.assign(secureConfigs.firebase, envVars);
+    }
+  } catch (error) {
+    console.error('Error loading .env file:', error);
+  }
+}
 
 class AppUpdater {
   constructor() {
@@ -106,12 +174,14 @@ ipcMain.handle('share-file', async (event, filePath: string) => {
       message: 'Share',
       buttons: ['Share'],
       defaultId: 0,
-      noLink: true
+      noLink: true,
     });
 
     // Use NSWorkspace to show the share sheet
     const { exec } = require('child_process');
-    exec(`osascript -e 'tell application "Finder" to activate' -e 'tell application "System Events" to keystroke "s" using {command down, shift down}'`);
+    exec(
+      `osascript -e 'tell application "Finder" to activate' -e 'tell application "System Events" to keystroke "s" using {command down, shift down}'`,
+    );
   } else {
     // Fallback for non-macOS platforms
     shell.showItemInFolder(filePath);
@@ -131,6 +201,73 @@ ipcMain.handle('openai-api-key:set', async (_, key: string) => {
 
 ipcMain.handle('show-in-finder', async (_, filePath: string) => {
   shell.showItemInFolder(filePath);
+});
+
+// Add this in the app.on('ready') handler, after other IPC handlers
+// Secure config IPC handler
+ipcMain.handle('get-secure-config', (_, configName) => {
+  if (configName in secureConfigs) {
+    return secureConfigs[configName as keyof typeof secureConfigs];
+  }
+  return null;
+});
+
+// Add this near the other IPC handlers
+ipcMain.handle('open-external-auth', async (_, provider: string) => {
+  try {
+    log.info(`Opening external auth for provider: ${provider}`);
+
+    // For Google authentication
+    if (provider === 'google') {
+      // Get Firebase config
+      const firebaseConfig = secureConfigs.firebase;
+
+      if (!firebaseConfig || !firebaseConfig.apiKey) {
+        throw new Error('Firebase configuration not found');
+      }
+
+      // Create a BrowserWindow for authentication
+      const authWindow = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: true,
+        },
+      });
+
+      // Use Firebase's own authentication URL
+      const authUrl = `https://${firebaseConfig.authDomain}/auth/handler?apiKey=${firebaseConfig.apiKey}&provider=google.com`;
+
+      log.info(`Loading auth URL: ${authUrl}`);
+      await authWindow.loadURL(authUrl);
+
+      return new Promise((resolve, reject) => {
+        // Handle the redirect
+        authWindow.webContents.on('will-redirect', (event, url) => {
+          if (url.includes('__/auth/handler')) {
+            // Successfully authenticated
+            authWindow.close();
+            resolve({ success: true });
+          } else if (url.includes('error=')) {
+            authWindow.close();
+            reject(new Error('Authentication failed'));
+          }
+        });
+
+        // Handle window close
+        authWindow.on('closed', () => {
+          reject(new Error('Authentication window was closed'));
+        });
+      });
+    }
+
+    throw new Error(`Unsupported auth provider: ${provider}`);
+  } catch (error) {
+    log.error('External auth error:', error);
+    throw error;
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {
@@ -272,7 +409,7 @@ app
       log.info('Looking for tray icon at:', TrayIcons.default);
 
       // Clear any leftover export queue from previous session
-      await clearExportQueue().catch(error => {
+      await clearExportQueue().catch((error) => {
         log.error('Failed to clear export queue:', error);
       });
 
@@ -311,11 +448,13 @@ app
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
             preload: app.isPackaged
               ? path.join(__dirname, 'preload.js')
               : path.join(__dirname, '../../.erb/dll/preload.js'),
-          }
-        }
+          },
+        },
       });
 
       mb.on('ready', () => {
@@ -349,12 +488,11 @@ app
       mb.on('after-hide', () => {
         log.info('Menubar window hidden');
       });
-
     } catch (error) {
       log.error('Failed to create tray:', error);
       dialog.showErrorBox(
         'Failed to create tray',
-        'The application failed to start properly. Please try reinstalling the app.'
+        'The application failed to start properly. Please try reinstalling the app.',
       );
       app.quit();
     }
@@ -406,10 +544,9 @@ app.on('ready', () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' file: data: blob: local-file: http://localhost:8000; img-src 'self' file: data: blob: local-file:; media-src 'self' file: blob: local-file:; connect-src 'self' http://localhost:8000"
+          "default-src 'self' 'unsafe-inline' file: data: blob: local-file: http://localhost:8000; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' file: data: blob: local-file: https://*.googleusercontent.com; media-src 'self' file: blob: local-file:; connect-src 'self' http://localhost:8000 https://*.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.firebaseauth.com https://*.identitytoolkit.googleapis.com https://*.cloudfunctions.net https://*.gstatic.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com;",
         ],
       },
     });
   });
 });
-
