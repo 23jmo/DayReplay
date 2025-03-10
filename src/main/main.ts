@@ -47,51 +47,11 @@ import {
 } from './store';
 import type { Settings } from './store';
 import { TrayIcons } from './assets';
+// Import our secure configuration manager
+import { initializeFirebaseConfig, getSecureConfig } from './secureConfig';
 
 // Add this near the top of the imports
 // import { ipcMain } from 'electron';
-
-// Add this after other initialization code but before app.on('ready')
-// Secure configuration handler
-const secureConfigs = {
-  firebase: {
-    apiKey: process.env.FIREBASE_API_KEY || '',
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
-    projectId: process.env.FIREBASE_PROJECT_ID || '',
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: process.env.FIREBASE_APP_ID || '',
-    measurementId: process.env.FIREBASE_MEASUREMENT_ID || '',
-  },
-};
-
-// Try to load from .env file in development
-if (process.env.NODE_ENV === 'development') {
-  try {
-    const envPath = path.join(__dirname, '../../.env');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      const envVars = envContent.split('\n').reduce(
-        (acc, line) => {
-          const match = line.match(/^FIREBASE_([A-Z_]+)=(.+)$/);
-          if (match) {
-            const key = match[1]
-              .toLowerCase()
-              .replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-            acc[key] = match[2].trim();
-          }
-          return acc;
-        },
-        {} as Record<string, string>,
-      );
-
-      // Update config with values from .env
-      Object.assign(secureConfigs.firebase, envVars);
-    }
-  } catch (error) {
-    console.error('Error loading .env file:', error);
-  }
-}
 
 class AppUpdater {
   constructor() {
@@ -249,13 +209,9 @@ ipcMain.handle('show-in-finder', async (_, filePath: string) => {
   shell.showItemInFolder(filePath);
 });
 
-// Add this in the app.on('ready') handler, after other IPC handlers
 // Secure config IPC handler
 ipcMain.handle('get-secure-config', (_, configName) => {
-  if (configName in secureConfigs) {
-    return secureConfigs[configName as keyof typeof secureConfigs];
-  }
-  return null;
+  return getSecureConfig(configName);
 });
 
 // Add this near the other IPC handlers
@@ -266,7 +222,7 @@ ipcMain.handle('open-external-auth', async (_, provider: string) => {
     // For Google authentication
     if (provider === 'google') {
       // Get Firebase config
-      const firebaseConfig = secureConfigs.firebase;
+      const firebaseConfig = getSecureConfig('firebase');
 
       if (!firebaseConfig || !firebaseConfig.apiKey) {
         throw new Error('Firebase configuration not found');
@@ -537,6 +493,9 @@ ipcMain.on('window-controls', (_, command) => {
 });
 
 app.on('ready', () => {
+  // Initialize Firebase configuration
+  initializeFirebaseConfig();
+
   // Set up CSP
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // Get the port from environment or use default

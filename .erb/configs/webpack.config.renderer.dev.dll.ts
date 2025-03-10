@@ -14,6 +14,19 @@ checkNodeEnv('development');
 
 const dist = webpackPaths.dllPath;
 
+// Firebase packages to exclude from DLL bundling
+const excludePackages = [
+  'firebase',
+  '@firebase/auth',
+  '@firebase/auth-types',
+  'react-firebase-hooks',
+];
+
+// Filter out the excluded packages
+const dependenciesToInclude = Object.keys(dependencies || {}).filter(
+  (dependency) => !excludePackages.includes(dependency),
+);
+
 const configuration: webpack.Configuration = {
   context: webpackPaths.rootPath,
 
@@ -31,7 +44,7 @@ const configuration: webpack.Configuration = {
   module: require('./webpack.config.renderer.dev').default.module,
 
   entry: {
-    renderer: Object.keys(dependencies || {}),
+    renderer: dependenciesToInclude,
   },
 
   output: {
