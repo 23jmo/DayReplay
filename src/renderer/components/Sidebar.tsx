@@ -64,21 +64,6 @@ export function AppSidebar() {
     }
   };
 
-  const handleDirectExport = async () => {
-    try {
-      const result = await window.electronAPI.exportRecordingDirect(30);
-      if (result.success) {
-        console.log('Export successful');
-        // You could add a toast notification here
-      } else {
-        console.error('Export failed:', result.error);
-        // You could add an error toast here
-      }
-    } catch (error) {
-      console.error('Export error:', error);
-    }
-  };
-
   return (
     <>
       <Sidebar>
@@ -98,12 +83,6 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
-                <SidebarMenuItem>
-                  <SidebarMenuButton onClick={handleDirectExport}>
-                    <Download />
-                    <span>Export Timelapse</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
