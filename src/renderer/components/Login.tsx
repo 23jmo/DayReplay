@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../shared/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { isFirebaseConfigured } from '../../shared/firebase';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,8 +10,27 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false);
 
   const { login, signup, loginWithGoogle, initialized } = useAuth();
+
+  // Check if Firebase is configured
+  useEffect(() => {
+    const checkFirebaseConfig = async () => {
+      try {
+        // Dynamically import to avoid build issues
+        const firebase = await import('../../shared/firebase');
+        setIsFirebaseConfigured(firebase.isFirebaseConfigured());
+      } catch (error) {
+        console.error('Error checking Firebase configuration:', error);
+        setIsFirebaseConfigured(false);
+      }
+    };
+
+    if (initialized) {
+      checkFirebaseConfig();
+    }
+  }, [initialized]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +177,7 @@ const Login: React.FC = () => {
   }
 
   // Show a message if Firebase is initialized but not properly configured
-  if (initialized && !isFirebaseConfigured()) {
+  if (initialized && !isFirebaseConfigured) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
         <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">

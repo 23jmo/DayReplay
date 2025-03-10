@@ -1,25 +1,8 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  browserLocalPersistence,
-  browserSessionPersistence,
-  setPersistence,
-  Auth,
-  UserCredential,
-  type User,
-} from 'firebase/auth';
-import { app as electronApp } from 'electron';
+import type { FirebaseApp } from 'firebase/app';
+import type { Auth, User, UserCredential } from 'firebase/auth';
 
 // Re-export the Auth and User types
-export type { Auth, User };
+export type { Auth, User, UserCredential };
 
 // Default empty config
 const defaultConfig = {
@@ -63,7 +46,7 @@ const getFirebaseConfig = async () => {
 // Initialize Firebase with secure config
 let firebaseApp: FirebaseApp | null = null;
 let firebaseAuth: Auth | null = null;
-let googleProvider: GoogleAuthProvider | null = null;
+let googleProvider: any = null;
 
 // Helper function to check if Firebase is properly configured
 export const isFirebaseConfigured = () => {
@@ -78,11 +61,22 @@ const initializeFirebase = async () => {
     // Only initialize if we have a valid API key
     if (firebaseConfig.apiKey) {
       try {
+        // Import Firebase modules
+        const { initializeApp } = await import('firebase/app');
+        const {
+          getAuth,
+          setPersistence,
+          browserLocalPersistence,
+          GoogleAuthProvider,
+        } = await import('firebase/auth');
+
         firebaseApp = initializeApp(firebaseConfig);
         firebaseAuth = getAuth(firebaseApp);
 
         // Set persistence to local to maintain login state
-        await setPersistence(firebaseAuth, browserLocalPersistence);
+        if (firebaseAuth) {
+          await setPersistence(firebaseAuth, browserLocalPersistence);
+        }
 
         // Initialize Google provider
         googleProvider = new GoogleAuthProvider();
@@ -95,8 +89,6 @@ const initializeFirebase = async () => {
         googleProvider.setCustomParameters({
           // Force account selection even when one account is available
           prompt: 'select_account',
-          // Display all accounts, not just Google Workspace accounts
-          hd: '*',
         });
 
         console.log('Firebase initialized successfully with Google provider');
@@ -139,6 +131,11 @@ export const signInWithGoogle = async () => {
   try {
     console.log('Starting Google sign-in process...');
 
+    // Import Firebase auth
+    const { signInWithPopup, signInWithRedirect } = await import(
+      'firebase/auth'
+    );
+
     // Try to use popup for better experience in Electron
     const result = await signInWithPopup(firebaseAuth, googleProvider);
     console.log('Google sign-in successful');
@@ -160,6 +157,8 @@ export const signInWithGoogle = async () => {
           // Use a custom IPC method to open auth in default browser
           return await window.electronAPI.openExternalAuth('google');
         } else {
+          // Import Firebase auth
+          const { signInWithRedirect } = await import('firebase/auth');
           // Fallback to redirect (not ideal for Electron)
           await signInWithRedirect(firebaseAuth, googleProvider);
           return null; // Will need to handle redirect result elsewhere
@@ -177,17 +176,59 @@ export const signInWithGoogle = async () => {
 // Export the initialization function
 export { initializeFirebase };
 
-// Export auth functions and types
-export {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-};
-
 // Export a function to get the auth instance
 export const getFirebaseAuth = () => firebaseAuth;
 
 // Export a function to get the app instance
 export const getFirebaseApp = () => firebaseApp;
+
+// Export auth functions with dynamic imports
+export const signInWithEmailAndPassword = async (
+  auth: Auth,
+  email: string,
+  password: string,
+) => {
+  const { signInWithEmailAndPassword: signIn } = await import('firebase/auth');
+  return signIn(auth, email, password);
+};
+
+export const createUserWithEmailAndPassword = async (
+  auth: Auth,
+  email: string,
+  password: string,
+) => {
+  const { createUserWithEmailAndPassword: createUser } = await import(
+    'firebase/auth'
+  );
+  return createUser(auth, email, password);
+};
+
+export const signOut = async (auth: Auth) => {
+  const { signOut: signOutFn } = await import('firebase/auth');
+  return signOutFn(auth);
+};
+
+export const onAuthStateChanged = (
+  auth: Auth,
+  callback: (user: User | null) => void,
+) => {
+  if (!auth) return () => {};
+
+  // Dynamically import onAuthStateChanged
+  (async () => {
+    try {
+      const { onAuthStateChanged: onAuthStateChangedFn } = await import(
+        'firebase/auth'
+      );
+      return onAuthStateChangedFn(auth, callback);
+    } catch (error) {
+      console.error('Error importing onAuthStateChanged:', error);
+      // Call the callback with null to indicate no user
+      setTimeout(() => callback(null), 0);
+      return () => {};
+    }
+  })();
+
+  // Return a dummy unsubscribe function for now
+  return () => {};
+};

@@ -1,16 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  getFirebaseAuth,
-  initializeFirebase,
-  signInWithGoogle,
-} from './firebase';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Auth } from 'firebase/auth';
+import type { User, Auth } from 'firebase/auth';
 
+// Import types only
 interface AuthContextType {
   currentUser: User | null;
   loading: boolean;
@@ -45,6 +37,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const initialize = async () => {
       try {
+        // Dynamically import to avoid build issues
+        const { initializeFirebase } = await import('./firebase');
         const { auth: firebaseAuth } = await initializeFirebase();
         setAuth(firebaseAuth);
         setInitialized(true);
@@ -63,35 +57,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (!auth) return;
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
+    const setupAuthListener = async () => {
+      try {
+        // Dynamically import to avoid build issues
+        const { onAuthStateChanged } = await import('./firebase');
 
-      // Redirect to home page if user is logged in and on login or root page
-      // Skip redirect for other pages like frameratePicker
-      if (
-        user &&
-        (location.pathname === '/login' || location.pathname === '/')
-      ) {
-        navigate('/home');
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          setCurrentUser(user);
+          setLoading(false);
+
+          // Redirect to home page if user is logged in and on login page
+          if (
+            user &&
+            (location.pathname === '/login' || location.pathname === '/')
+          ) {
+            navigate('/home');
+          }
+        });
+
+        // Cleanup subscription
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up auth listener:', error);
+        setLoading(false);
+        return () => {}; // Return empty cleanup function
       }
-    });
+    };
 
-    // Cleanup subscription
-    return unsubscribe;
+    setupAuthListener();
   }, [auth, navigate, location.pathname]);
 
   // Auth functions
   const login = async (email: string, password: string) => {
     if (!auth) throw new Error('Firebase auth not initialized');
-    await signInWithEmailAndPassword(auth, email, password);
-    navigate('/home'); // Redirect to home page after login
+
+    try {
+      // Dynamically import to avoid build issues
+      const { signInWithEmailAndPassword } = await import('./firebase');
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/home'); // Redirect to home page after login
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
   const loginWithGoogle = async () => {
     try {
       console.log('Starting Google authentication from AuthContext...');
+
+      // Dynamically import to avoid build issues
+      const { signInWithGoogle } = await import('./firebase');
       const result = await signInWithGoogle();
+
       console.log('Google authentication successful:', result);
 
       // If we got a result, we're good to go
@@ -123,14 +141,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const signup = async (email: string, password: string) => {
     if (!auth) throw new Error('Firebase auth not initialized');
-    await createUserWithEmailAndPassword(auth, email, password);
-    navigate('/home'); // Redirect to home page after signup
+
+    try {
+      // Dynamically import to avoid build issues
+      const { createUserWithEmailAndPassword } = await import('./firebase');
+      await createUserWithEmailAndPassword(auth, email, password);
+      navigate('/home'); // Redirect to home page after signup
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   };
 
   const logout = async () => {
     if (!auth) throw new Error('Firebase auth not initialized');
-    await signOut(auth);
-    navigate('/login'); // Redirect to login page after logout
+
+    try {
+      // Dynamically import to avoid build issues
+      const { signOut } = await import('./firebase');
+      await signOut(auth);
+      navigate('/login'); // Redirect to login page after logout
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    }
   };
 
   const value = {
