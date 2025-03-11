@@ -231,11 +231,17 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": ".",
+        "filter": [
+          "assets/**/*"
+        ]
       }
     ],
     "mac": {
       "sign": ".erb/scripts/notarize.js",
-      "notarize": false,
+      "notarize": true,
       "target": {
         "target": "dmg",
         "arch": [
