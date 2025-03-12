@@ -34,7 +34,7 @@
       "url": "https://github.com/amilajack"
     }
   ],
-  "main": "./.erb/dll/main.bundle.dev.js",
+  "main": "dist/main/main.js",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
     "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
@@ -167,7 +167,7 @@
     "css-minimizer-webpack-plugin": "^5.0.1",
     "detect-port": "^1.5.1",
     "electron": "^31.3.0",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "^25.1.8",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.2",
     "eslint": "^8.49.0",
@@ -214,55 +214,29 @@
     "productName": "Day Replay",
     "appId": "org.erb.DayReplay",
     "asar": true,
+    "asarUnpack": "**\\*.{node,dll}",
     "files": [
-      "dist",
-      "node_modules",
-      "package.json",
-      "assets/**/*"
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "assets",
-        "to": "assets"
-      },
-      {
-        "from": "ffmpeg",
-        "to": "ffmpeg",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": ".",
-        "filter": [
-          "assets/**/*"
-        ]
-      }
-    ],
+    "afterSign": ".erb/scripts/notarize.js",
     "mac": {
-      "sign": ".erb/scripts/notarize.js",
-      "notarize": true,
       "target": {
-        "target": "dmg",
+        "target": "default",
         "arch": [
-          "arm64",
-          "x64"
+          "universal"
         ]
       },
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "type": "distribution",
       "hardenedRuntime": true,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "gatekeeperAssess": false,
-      "extendInfo": {
-        "NSCameraUsageDescription": "This app needs access to camera when used to record screen.",
-        "NSMicrophoneUsageDescription": "This app needs access to microphone when used to record screen.",
-        "NSScreenCaptureUsageDescription": "This app needs access to screen capture to create timelapses."
-      }
+      "x64ArchFiles": "Contents/Resources/ffmpeg/ffmpeg"
     },
     "dmg": {
-      "icon": "assets/DayReplayIcon.png",
-      "iconSize": 64,
       "contents": [
         {
           "x": 130,
@@ -276,27 +250,15 @@
         }
       ]
     },
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
-    },
     "directories": {
       "app": "release/app",
       "buildResources": "assets",
       "output": "release/build"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "electron-react-boilerplate",
-      "repo": "electron-react-boilerplate"
-    }
+    "extraResources": [
+      "./assets/**",
+      "./ffmpeg/**"
+    ]
   },
   "collective": {
     "url": "https://opencollective.com/electron-react-boilerplate-594"
