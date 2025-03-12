@@ -1,37 +1,48 @@
-import { DayEntry } from '@/src/shared/types'
-import { formatDuration } from '@/src/shared/utils'
-import React, { useEffect, useState, useRef } from 'react'
-import ReactPlayer from 'react-player'
-import Timeline from './timeline'
-import { Tag } from './tag'
-import { MoreHorizontal, Share2 } from "lucide-react"
+import { DayEntry } from '@/src/shared/types';
+import { formatDuration } from '@/src/shared/utils';
+import React, { useEffect, useState, useRef } from 'react';
+import ReactPlayer from 'react-player';
+import Timeline from './timeline';
+import { Tag } from './tag';
+import { MoreHorizontal, Share2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface DayViewProps {
-  day: DayEntry
-  children?: React.ReactNode
+  day: DayEntry;
+  children?: React.ReactNode;
 }
 
 const DayView = ({ day, children }: DayViewProps) => {
-  const [videoUrl, setVideoUrl] = useState<string>('')
-  const [error, setError] = useState<string>('')
-  const playerRef = useRef<ReactPlayer>(null)
+  const [videoUrl, setVideoUrl] = useState<string>('');
+  const [error, setError] = useState<string>('');
+  const playerRef = useRef<ReactPlayer>(null);
 
   useEffect(() => {
     const loadVideo = async () => {
       try {
-        const url = await window.electronAPI.getVideoUrl(day.videoPath);
-        if (!url) {
+        if (!day.videoPath) {
+          console.error('Video path is missing from day entry');
           setError('Video file not found');
           return;
         }
+
+        console.log('Loading video from path:', day.videoPath);
+        const url = await window.electronAPI.getVideoUrl(day.videoPath);
+
+        if (!url) {
+          console.error('Failed to get video URL for path:', day.videoPath);
+          setError('Video file not found');
+          return;
+        }
+
+        console.log('Video URL loaded:', url);
         setVideoUrl(url);
         setError('');
       } catch (err) {
@@ -44,15 +55,18 @@ const DayView = ({ day, children }: DayViewProps) => {
   }, [day.videoPath]);
 
   // Calculate total duration for timeline
-  const totalDuration = day.appUsage && day.appUsage.length > 0
-    ? day.appUsage[day.appUsage.length - 1].endTime - day.appUsage[0].startTime
-    : 0;
+  const totalDuration =
+    day.appUsage && day.appUsage.length > 0
+      ? day.appUsage[day.appUsage.length - 1].endTime -
+        day.appUsage[0].startTime
+      : 0;
 
   const handleSeek = (timestamp: number) => {
     if (playerRef.current && day.appUsage?.length) {
       // Convert timestamp to seconds relative to video start with millisecond precision
       const startTime = day.appUsage[0].startTime;
-      const totalDuration = day.appUsage[day.appUsage.length - 1].endTime - startTime;
+      const totalDuration =
+        day.appUsage[day.appUsage.length - 1].endTime - startTime;
       const seekTime = (timestamp - startTime) / totalDuration;
 
       playerRef.current.seekTo(seekTime, 'fraction');
@@ -68,7 +82,7 @@ const DayView = ({ day, children }: DayViewProps) => {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
-              day: 'numeric'
+              day: 'numeric',
             })}
           </h1>
           <DropdownMenu>
@@ -78,11 +92,13 @@ const DayView = ({ day, children }: DayViewProps) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={async () => {
-                if (day.videoPath) {
-                  await window.electronAPI.shareFile(day.videoPath);
-                }
-              }}>
+              <DropdownMenuItem
+                onClick={async () => {
+                  if (day.videoPath) {
+                    await window.electronAPI.shareFile(day.videoPath);
+                  }
+                }}
+              >
                 <Share2 className="mr-2 h-4 w-4" />
                 <span>Share Timelapse</span>
               </DropdownMenuItem>
@@ -90,9 +106,9 @@ const DayView = ({ day, children }: DayViewProps) => {
           </DropdownMenu>
         </div>
         <div id="descriptors" className="flex flex-wrap gap-1 mb-4">
-            <Tag text={`${day.fps} FPS`} />
-            <Tag text={`${day.resolution}`} />
-            <Tag text={`${day.interval}s Interval`} />
+          <Tag text={`${day.fps} FPS`} />
+          <Tag text={`${day.resolution}`} />
+          <Tag text={`${day.interval}s Interval`} />
         </div>
 
         <div className="relative aspect-video bg-black rounded-lg overflow-hidden mb-6">
@@ -108,9 +124,98 @@ const DayView = ({ day, children }: DayViewProps) => {
               width="100%"
               height="100%"
               className="absolute inset-0 w-full h-full object-contain"
+              playing={true}
+              playsinline={true}
+              onReady={() => {
+                console.log('Video is ready to play');
+                // Clear any previous errors when video is ready
+                setError('');
+              }}
+              onStart={() => console.log('Video started playing')}
+              onBuffer={() => console.log('Video is buffering')}
               onError={(e) => {
-                console.error('Video error:', e);
-                setError('Error playing video');
+                console.error('Video playback error:', e);
+                // Try to determine the specific error
+                if (e && typeof e === 'object' && 'target' in e) {
+                  const target = e.target as HTMLVideoElement;
+                  if (target && target.error) {
+                    console.error(
+                      'Video element error:',
+                      target.error.code,
+                      target.error.message,
+                    );
+
+                    // Handle specific error codes
+                    switch (target.error.code) {
+                      case 1: // MEDIA_ERR_ABORTED
+                        setError('Video playback was aborted');
+                        break;
+                      case 2: // MEDIA_ERR_NETWORK
+                        setError(
+                          'Network error occurred while loading the video',
+                        );
+                        break;
+                      case 3: // MEDIA_ERR_DECODE
+                        setError(
+                          'Video decoding error - the file may be corrupted',
+                        );
+                        break;
+                      case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                        setError(
+                          'Video format is not supported - trying to reload',
+                        );
+                        // Try to reload with a slight delay
+                        setTimeout(() => {
+                          console.log('Attempting to reload video...');
+                          setVideoUrl('');
+                          setTimeout(async () => {
+                            try {
+                              console.log(
+                                'Fetching video URL again for:',
+                                day.videoPath,
+                              );
+                              const url = await window.electronAPI.getVideoUrl(
+                                day.videoPath,
+                              );
+                              if (url) {
+                                console.log('New video URL:', url);
+                                setVideoUrl(url);
+                              } else {
+                                setError('Could not reload video');
+                              }
+                            } catch (err) {
+                              console.error('Error reloading video:', err);
+                              setError('Error reloading video');
+                            }
+                          }, 500);
+                        }, 1000);
+                        break;
+                      default:
+                        setError('Error playing video');
+                    }
+                  } else {
+                    setError('Error playing video');
+                  }
+                } else {
+                  setError('Error playing video');
+                }
+              }}
+              config={{
+                file: {
+                  attributes: {
+                    controlsList: 'nodownload',
+                    disablePictureInPicture: true,
+                    playsInline: true,
+                    preload: 'auto',
+                  },
+                  forceVideo: true,
+                  forceHLS: false,
+                  forceDASH: false,
+                  hlsOptions: {
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                  },
+                },
               }}
             />
           ) : (
@@ -122,9 +227,12 @@ const DayView = ({ day, children }: DayViewProps) => {
 
         {day.appUsage && day.appUsage.length > 0 && (
           <div className="space-y-6">
-
-              <h2 className="text-lg font-semibold mb-4">Your Timeline</h2>
-              <Timeline appUsage={day.appUsage} totalDuration={totalDuration} onSeek={handleSeek} />
+            <h2 className="text-lg font-semibold mb-4">Your Timeline</h2>
+            <Timeline
+              appUsage={day.appUsage}
+              totalDuration={totalDuration}
+              onSeek={handleSeek}
+            />
 
             {/* <div className="p-6 bg-white rounded-lg shadow-sm">
               <h2 className="text-lg font-semibold mb-4">App Details</h2>
@@ -156,14 +264,17 @@ const DayView = ({ day, children }: DayViewProps) => {
             <div className="space-y-2">
               <p>Duration: {formatDuration(day.duration)}</p>
               <p>Screenshots: {day.numShots}</p>
-              <p>Productivity: {(day.productivity * 100).toFixed(1)}%</p>
+              <p>Productivity: {day.productivity.toFixed(1)}%</p>
             </div>
           </div>
           <div className="p-6 bg-white rounded-lg shadow-sm">
             <h2 className="text-lg font-semibold mb-2">Tags</h2>
             <div className="flex flex-wrap gap-2">
-              {day.tags.map(tag => (
-                <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+              {day.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                >
                   {tag}
                 </span>
               ))}
@@ -171,10 +282,17 @@ const DayView = ({ day, children }: DayViewProps) => {
           </div>
         </div>
 
+        <div className="mt-6 bg-white rounded-lg shadow-sm p-6">
+          <h2 className="text-lg font-semibold mb-2">Session Description</h2>
+          <p className="text-gray-700">
+            {day.description || 'No description available.'}
+          </p>
+        </div>
+
         {children}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default DayView
+export default DayView;

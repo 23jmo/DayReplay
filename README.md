@@ -1,4 +1,3 @@
-
 # Day Replay
 
 <p> 
@@ -7,9 +6,50 @@ Day Replay is an app that records what you do in a day. Takes a timelapse of you
 
 ## Installation
 
-### Version 1.0.0: 
+### Version 1.0.0:
+
 - <a href="release/build/Day Replay-4.6.0-arm64.dmg">Apple Silicon</a>
 - <a href="release/build/Day Replay-4.6.0.dmg">Intel</a>
+
+## Firebase Authentication Setup
+
+This application uses Firebase for authentication. To set up Firebase authentication:
+
+1. Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
+2. Enable Authentication in the Firebase console (Google provider recommended)
+3. Copy the Firebase configuration from your Firebase project settings
+4. Run the Firebase setup script:
+
+```bash
+npm run setup:firebase
+```
+
+This script will:
+
+- Create a `.env` file if it doesn't exist
+- Prompt you to enter your Firebase configuration details
+- Save the configuration to your `.env` file
+
+Alternatively, you can manually create a `.env` file by copying `.env.example`:
+
+```bash
+# Copy the example .env file
+cp .env.example .env
+
+# Edit the .env file with your Firebase configuration
+nano .env  # or use your preferred text editor
+```
+
+### How Firebase Configuration Works
+
+The application handles Firebase configuration securely:
+
+- **Development Mode**: Configuration is loaded from the `.env` file
+- **Production Mode**: Configuration is securely stored in an encrypted file in the app's data directory
+
+The first time you run the app in production, it will use the configuration from the build environment. On subsequent runs, it will use the securely stored configuration.
+
+**Important Security Note:** Never commit your `.env` file to version control. It contains sensitive API keys and should be kept private. The `.env` file is already added to `.gitignore` to prevent accidental commits.
 
 <!-- <img src=".erb/img/erb-banner.svg" width="100%" />
 

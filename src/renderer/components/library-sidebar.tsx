@@ -1,38 +1,38 @@
-import * as React from "react"
-import { DayEntry } from "@/src/shared/types"
-import { formatDisplayTitle } from "@/src/shared/utils"
-import { useCallback, useEffect, useState } from "react"
-import DayEntryButton from "./day-entry-button"
+import * as React from 'react';
+import { DayEntry } from '@/src/shared/types';
+import { formatDisplayTitle } from '@/src/shared/utils';
+import { useCallback, useEffect, useState } from 'react';
+import DayEntryButton from './day-entry-button';
 import type { Entry } from '../../shared/types';
 
 interface TimeGroup {
-  label: string
-  entries: Entry[]
-  isOpen: boolean
+  label: string;
+  entries: Entry[];
+  isOpen: boolean;
 }
 
 let Days: TimeGroup[] = [
   {
-    label: "Today",
+    label: 'Today',
     isOpen: true,
-    entries: []
+    entries: [],
   },
   {
-    label: "Previous 7 Days",
+    label: 'Previous 7 Days',
     isOpen: true,
-    entries: []
+    entries: [],
   },
   {
-    label: "Previous 30 Days",
+    label: 'Previous 30 Days',
     isOpen: true,
-    entries: []
+    entries: [],
   },
   {
-    label: "Long time ago",
+    label: 'Long time ago',
     isOpen: true,
-    entries: []
-  }
-]
+    entries: [],
+  },
+];
 
 // Sample data
 // const Days: TimeGroup[] = [
@@ -121,71 +121,112 @@ let Days: TimeGroup[] = [
 // ]
 
 const organizeTimeGroups = (days: DayEntry[]) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   // Reset the Days array
   Days = [
-    { label: "Today", isOpen: true, entries: [] },
-    { label: "Previous 7 Days", isOpen: true, entries: [] },
-    { label: "Previous 30 Days", isOpen: true, entries: [] },
-    { label: "Long time ago", isOpen: true, entries: [] }
-  ]
+    { label: 'Today', isOpen: true, entries: [] },
+    { label: 'Previous 7 Days', isOpen: true, entries: [] },
+    { label: 'Previous 30 Days', isOpen: true, entries: [] },
+    { label: 'Long time ago', isOpen: true, entries: [] },
+  ];
 
-  let id = 0
+  let id = 0;
 
   for (const day of days) {
-    const date = new Date(parseInt(day.startDate))
-    date.setHours(0, 0, 0, 0)
+    const date = new Date(parseInt(day.startDate));
+    date.setHours(0, 0, 0, 0);
 
     if (date.getTime() >= today.getTime()) {
-      Days[0].entries.push({ day, id: id++ })
+      Days[0].entries.push({ day, id: id++ });
     } else if (date >= sevenDaysAgo) {
-      Days[1].entries.push({ day, id: id++ })
+      Days[1].entries.push({ day, id: id++ });
     } else if (date >= thirtyDaysAgo) {
-      Days[2].entries.push({ day, id: id++ })
+      Days[2].entries.push({ day, id: id++ });
     } else {
-      Days[3].entries.push({ day, id: id++ })
+      Days[3].entries.push({ day, id: id++ });
     }
   }
 
   // Sort each group's entries by timestamp (newest first)
-  Days.forEach(group => {
-    group.entries.sort((a, b) => parseInt(b.day.startDate) - parseInt(a.day.startDate))
-  })
+  Days.forEach((group) => {
+    group.entries.sort(
+      (a, b) => parseInt(b.day.startDate) - parseInt(a.day.startDate),
+    );
+  });
 
-  return Days
-}
+  return Days;
+};
 
 interface LibrarySidebarProps {
   onDaySelect: (info: { day: DayEntry; id: string }) => void;
   selectedEntryId: string | null;
 }
 
-const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEntryId }) => {
-  const [groups, setGroups] = useState<TimeGroup[]>(Days)
+const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
+  onDaySelect,
+  selectedEntryId,
+}) => {
+  const [groups, setGroups] = useState<TimeGroup[]>(Days);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   const loadDays = useCallback(async () => {
-    const days = await window.electronAPI.getDays()
-    const organized = organizeTimeGroups(days)
-    setGroups(organized)
-  }, [])
+    try {
+      const days = await window.electronAPI.getDays();
+      const organized = organizeTimeGroups(days);
+
+      // If we have a selectedEntryId, ensure the group containing it is open
+      if (selectedEntryId && initialLoad) {
+        // Find which group contains the selected entry
+        organized.forEach((group) => {
+          const hasSelectedEntry = group.entries.some(
+            (entry) =>
+              entry.id.toString() === selectedEntryId ||
+              entry.day.startDate === selectedEntryId,
+          );
+
+          if (hasSelectedEntry) {
+            group.isOpen = true;
+          }
+        });
+
+        setInitialLoad(false);
+      }
+
+      setGroups(organized);
+    } catch (error) {
+      console.error('Error loading days in sidebar:', error);
+    }
+  }, [selectedEntryId, initialLoad]);
 
   useEffect(() => {
-    loadDays()
-  }, [])
+    loadDays();
+  }, [loadDays]);
 
-  const handleEntryClick =  useCallback((entry: Entry) => {
-    onDaySelect({ day: entry.day, id: entry.id.toString() })
-  }, [onDaySelect])
+  // Reload when selectedEntryId changes
+  useEffect(() => {
+    if (selectedEntryId) {
+      loadDays();
+    }
+  }, [selectedEntryId, loadDays]);
+
+  const handleEntryClick = useCallback(
+    (entry: Entry) => {
+      onDaySelect({ day: entry.day, id: entry.id.toString() });
+    },
+    [onDaySelect],
+  );
 
   const toggleGroup = React.useCallback((index: number) => {
-    setGroups(prev => prev.map((group, i) =>
-      i === index ? { ...group, isOpen: !group.isOpen } : group
-    ))
-  }, [])
+    setGroups((prev) =>
+      prev.map((group, i) =>
+        i === index ? { ...group, isOpen: !group.isOpen } : group,
+      ),
+    );
+  }, []);
 
   return (
     <aside className="w-80 border-r bg-white flex flex-col">
@@ -196,10 +237,12 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
               onClick={() => toggleGroup(index)}
               className="flex w-full items-center justify-between p-2 hover:bg-gray-100 sticky top-0 bg-white z-10"
             >
-              <span className="text-sm font-medium text-gray-500">{group.label}</span>
+              <span className="text-sm font-medium text-gray-500">
+                {group.label}
+              </span>
               <svg
                 className={`h-4 w-4 text-gray-500 transition-transform ${
-                  group.isOpen ? "rotate-180" : ""
+                  group.isOpen ? 'rotate-180' : ''
                 }`}
                 fill="none"
                 stroke="currentColor"
@@ -219,9 +262,12 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
                   <DayEntryButton
                     key={entry.id}
                     entry={entry}
-                    selectedEntryId={selectedEntryId || ""}
+                    selectedEntryId={selectedEntryId || ''}
                     handleEntryClick={handleEntryClick}
-                    displayTitle={formatDisplayTitle(entry.day.startDate, entry.day.duration)}
+                    displayTitle={formatDisplayTitle(
+                      entry.day.startDate,
+                      entry.day.duration,
+                    )}
                   />
                 ))}
               </div>
@@ -230,7 +276,7 @@ const LibrarySidebar: React.FC<LibrarySidebarProps> = ({ onDaySelect, selectedEn
         ))}
       </nav>
     </aside>
-  )
-}
+  );
+};
 
 export default LibrarySidebar;

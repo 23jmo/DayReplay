@@ -29,7 +29,7 @@ let appTray: Tray | null = null;
 let currentApp: AppUsageData | null = null;
 let appUsageData: AppUsageData[] = [];
 
-let framerate: number;
+let framerate: number = 30;
 let resolution: string;
 let intervalInSeconds: number;
 let startDate = Date.now();
@@ -50,6 +50,8 @@ const MAX_WINDOW_TRACKING_ERRORS = 3;
 let isWindowTrackingBackoff = false;
 let windowTrackingBackoffTimeout: NodeJS.Timeout | null = null;
 let hasShownPermissionDialog = false;
+let binaryFailureCount = 0;
+const MAX_BINARY_FAILURES = 5;
 
 // Export the menu update callback setter
 export function setMenuUpdateCallback(callback: () => void) {
@@ -84,7 +86,7 @@ export async function clearTempDir() {
         } catch (unlinkError) {
           log.error(`Error deleting file ${filePath}:`, unlinkError);
         }
-      })
+      }),
     );
   } catch (error) {
     log.error('Error clearing temp directory:', error);
@@ -111,47 +113,131 @@ async function getActiveWindowInfo(): Promise<AppUsageData | null> {
   try {
     const activeWinInfo = await activeWindow({
       screenRecordingPermission: true,
-      accessibilityPermission: true
+      accessibilityPermission: true,
     });
 
-    // Reset error count on success
+    // Reset error counts on success
     windowTrackingErrorCount = 0;
+    binaryFailureCount = 0;
     hasShownPermissionDialog = false;
-    return activeWinInfo ? {
-      appName: activeWinInfo.owner.name,
-      title: activeWinInfo.title,
-      url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
-      owner: {
-        name: activeWinInfo.owner.name,
-        path: activeWinInfo.owner.path,
-      },
-      startTime: Date.now(),
-      endTime: Date.now(),
-      duration: 0,
-    } : null;
+    return activeWinInfo
+      ? {
+          appName: activeWinInfo.owner.name,
+          title: activeWinInfo.title,
+          url: 'url' in activeWinInfo ? activeWinInfo.url : undefined,
+          owner: {
+            name: activeWinInfo.owner.name,
+            path: activeWinInfo.owner.path,
+          },
+          startTime: Date.now(),
+          endTime: Date.now(),
+          duration: 0,
+        }
+      : null;
   } catch (error: any) {
+    // Check specifically for binary execution errors
+    if (
+      error.message?.includes('Command failed: ') &&
+      error.message?.includes('get-windows/main')
+    ) {
+      binaryFailureCount++;
+      log.error(
+        `get-windows binary execution failed (attempt ${binaryFailureCount}/${MAX_BINARY_FAILURES}):`,
+        error,
+      );
+
+      // Try to fix permissions every other attempt
+      if (binaryFailureCount % 2 === 0) {
+        try {
+          const binaryPath = path.join(
+            __dirname,
+            '../../node_modules/get-windows/main',
+          );
+          await fs.promises.chmod(binaryPath, '755');
+          log.info(
+            'Attempted to restore execute permissions to get-windows binary',
+          );
+        } catch (chmodError) {
+          log.error(
+            'Failed to fix get-windows binary permissions:',
+            chmodError,
+          );
+        }
+      }
+
+      // Only enter backoff mode after all retries fail
+      if (binaryFailureCount >= MAX_BINARY_FAILURES) {
+        // Enter extended backoff for binary issues
+        isWindowTrackingBackoff = true;
+
+        // Stop any active recording when entering backoff
+        if (isRecording) {
+          safelyStopRecording();
+          // Queue the export if we have screenshots
+          if (screenshotCount > 0) {
+            await addToExportQueue();
+            log.info(
+              'Added to export queue due to binary error backoff after max retries',
+            );
+          }
+        }
+
+        // Clear app tracking interval
+        if (appTrackingInterval) {
+          clearInterval(appTrackingInterval);
+          appTrackingInterval = null;
+        }
+
+        // Set a shorter timeout for binary issues
+        if (windowTrackingBackoffTimeout) {
+          clearTimeout(windowTrackingBackoffTimeout);
+        }
+        windowTrackingBackoffTimeout = setTimeout(() => {
+          log.info('Attempting to resume window tracking after binary error');
+          isWindowTrackingBackoff = false;
+          binaryFailureCount = 0; // Reset counter for fresh start
+          if (isAutoRecordingEnabled && !appTrackingInterval) {
+            appTrackingInterval = setInterval(trackAppChange, 1000);
+          }
+        }, 60000); // 1 minute backoff
+      }
+      return null;
+    }
+
+    // Handle other errors (permissions, etc.) as before...
     windowTrackingErrorCount++;
-    log.error(`Error getting active window (attempt ${windowTrackingErrorCount}):`, error);
+    log.error(
+      `Error getting active window (attempt ${windowTrackingErrorCount}):`,
+      error,
+    );
 
     // Check if this might be a permissions issue
-    if (error.message?.includes('Command failed') && !hasShownPermissionDialog) {
+    if (
+      error.message?.includes('Command failed') &&
+      !hasShownPermissionDialog
+    ) {
       hasShownPermissionDialog = true; // Only show once
-      dialog.showMessageBox({
-        type: 'warning',
-        title: 'Permission Error',
-        message: 'Unable to track active windows',
-        detail: 'This might be caused by missing permissions. Please check:\n\n' +
-                '1. System Settings > Privacy & Security > Accessibility\n' +
-                '2. System Settings > Privacy & Security > Screen Recording\n\n' +
-                'Make sure DayReplay is allowed in both locations. You may need to remove and re-add the permissions.',
-        buttons: ['Open System Settings', 'Cancel'],
-        defaultId: 0
-      }).then(({ response }) => {
-        if (response === 0) {
-          // Open System Preferences to Privacy & Security
-          require('child_process').exec('open x-apple.systempreferences:com.apple.preference.security?Privacy');
-        }
-      });
+      dialog
+        .showMessageBox({
+          type: 'warning',
+          title: 'Permission Error',
+          message: 'Unable to track active windows',
+          detail:
+            'This might be caused by missing permissions. Please check:\n\n' +
+            '1. System Settings > Privacy & Security > Accessibility\n' +
+            '2. System Settings > Privacy & Security > Screen Recording\n\n' +
+            'Make sure DayReplay is allowed in both locations. You may need to remove and re-add the permissions.',
+          buttons: ['Open System Settings', 'Cancel'],
+          defaultId: 0,
+        })
+        .then(({ response }) => {
+          if (response === 0) {
+            // Open System Preferences to Privacy & Security
+            require('child_process').exec(
+              'open x-apple.systempreferences:com.apple.preference.security?Privacy',
+            );
+          }
+        });
 
       // Enter backoff immediately for permission issues
       isWindowTrackingBackoff = true;
@@ -271,7 +357,7 @@ async function trackAppChange() {
         log.info('Login window timeout cancelled - user became active');
       } else {
         // If we're active but not coming from login window, try to process any queued exports
-        await processExportQueue().catch(error => {
+        await processExportQueue().catch((error) => {
           log.error('Failed to process export queue:', error);
         });
       }
@@ -296,7 +382,10 @@ async function trackAppChange() {
           loginWindowTimer = setTimeout(async () => {
             // Check if we're still in login window state
             const currentAppInfo = await getActiveWindowInfo();
-            if (loginWindowStartTime && currentAppInfo?.appName === 'loginwindow') {
+            if (
+              loginWindowStartTime &&
+              currentAppInfo?.appName === 'loginwindow'
+            ) {
               try {
                 // First, properly stop all tracking and recording
                 if (currentApp) {
@@ -325,7 +414,9 @@ async function trackAppChange() {
                 // Restart app tracking if auto-recording is enabled
                 if (isAutoRecordingEnabled && !appTrackingInterval) {
                   appTrackingInterval = setInterval(trackAppChange, 1000);
-                  log.info('Restarted app tracking interval after login window timeout');
+                  log.info(
+                    'Restarted app tracking interval after login window timeout',
+                  );
                 }
               } catch (error) {
                 log.error('Failed to handle login window timeout:', error);
@@ -336,30 +427,41 @@ async function trackAppChange() {
               }
             } else {
               // User became active before timeout completed
-              log.info('Login window timeout cancelled - user became active before timeout');
+              log.info(
+                'Login window timeout cancelled - user became active before timeout',
+              );
               safelyResumeRecording();
               resetLoginWindowState();
               updateMenu();
             }
-          }, (2 * 1000));
+          }, 2 * 1000);
         }
       }
     }
 
-    if (currentApp && (currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title)) {
+    if (
+      currentApp &&
+      (currentApp.appName !== newAppInfo.appName ||
+        currentApp.title !== newAppInfo.title)
+    ) {
       if (currentApp.appName !== 'loginwindow') {
         const duration = now - currentApp.startTime;
         currentApp.endTime = now;
         currentApp.duration = duration;
         appUsageData.push(currentApp);
-        log.debug(`App change: ${currentApp.appName} (${currentApp.title}) -> ${newAppInfo.appName} (${newAppInfo.title}), duration: ${duration}ms`);
+        log.debug(
+          `App change: ${currentApp.appName} (${currentApp.title}) -> ${newAppInfo.appName} (${newAppInfo.title}), duration: ${duration}ms`,
+        );
       }
     }
 
-    if (!currentApp || currentApp.appName !== newAppInfo.appName || currentApp.title !== newAppInfo.title) {
+    if (
+      !currentApp ||
+      currentApp.appName !== newAppInfo.appName ||
+      currentApp.title !== newAppInfo.title
+    ) {
       currentApp = newAppInfo;
     }
-
   } catch (error) {
     log.error('Error in app change tracking:', error);
   }
@@ -413,7 +515,7 @@ async function checkAndAutoStartRecording(tray: Tray | null) {
         //@ts-ignore
         interval: settingsStore.get('interval') || 30,
         //@ts-ignore
-        resolution: settingsStore.get('resolution') || '1920x1080'
+        resolution: settingsStore.get('resolution') || '1920x1080',
       };
 
       intervalInSeconds = settings.interval;
@@ -478,8 +580,8 @@ async function takeScreenshot(outputPath: string): Promise<string> {
     types: ['screen'],
     thumbnailSize: {
       width: 1920,
-      height: 1080
-    }
+      height: 1080,
+    },
   });
 
   if (sources.length === 0) {
@@ -529,7 +631,15 @@ export function formatTimestampToArray(timestamp: string | number) {
   hours = hours % 12 || 12; // Convert to 12-hour format
   const time = `${hours}:${minutes} ${ampm}`;
 
-  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const daysOfWeek = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
   const dayOfWeek = daysOfWeek[date.getDay()];
 
   return [month, day, time, dayOfWeek];
@@ -542,7 +652,7 @@ async function ensureTempDir(): Promise<void> {
     // Clean directory but keep it
     const files = await fs.promises.readdir(tempDir);
     await Promise.all(
-      files.map((file) => fs.promises.unlink(path.join(tempDir, file)))
+      files.map((file) => fs.promises.unlink(path.join(tempDir, file))),
     );
   } catch (error) {
     log.error('Error managing temp directory:', error);
@@ -573,7 +683,11 @@ export function getRecordingState() {
 }
 
 // Extend the existing startRecording function
-export function startRecording(interval: number, res: string, tray: Tray): boolean {
+export function startRecording(
+  interval: number,
+  res: string,
+  tray: Tray,
+): boolean {
   if (recordingInterval) {
     //log.info('Recording already in progress');
     return false;
@@ -598,7 +712,7 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
     log.error('Failed to initialize temp directory:', error);
     dialog.showErrorBox(
       'Error',
-      'Failed to create temporary directory for screenshots. Please try again.'
+      'Failed to create temporary directory for screenshots. Please try again.',
     );
     return false;
   });
@@ -621,7 +735,12 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
       const fileName = path.join(tempDir, `${screenshotCount + 1}.jpg`);
       const imgPath = await takeScreenshot(fileName);
       screenshotCount++; // Increment counter after successful screenshot
-      log.debug('Screenshot saved to:', imgPath, 'Total screenshots:', screenshotCount);
+      log.debug(
+        'Screenshot saved to:',
+        imgPath,
+        'Total screenshots:',
+        screenshotCount,
+      );
       consecutiveErrors = 0; // Reset error counter on success
     } catch (error: any) {
       log.error('Error taking screenshot:', error);
@@ -631,7 +750,7 @@ export function startRecording(interval: number, res: string, tray: Tray): boole
         log.error('Too many consecutive errors, stopping recording');
         dialog.showErrorBox(
           'Recording Error',
-          'Failed to take screenshots multiple times. Recording has been stopped.'
+          'Failed to take screenshots multiple times. Recording has been stopped.',
         );
         pauseRecording(tray);
         return false;
@@ -674,12 +793,10 @@ export function pauseRecording(tray: Tray) {
 }
 
 export function resumeRecording(interval: number, tray: Tray) {
-
   if (recordingInterval) {
     log.info('Recording already in progress');
     return false;
-  }
-  else{
+  } else {
     log.info('Resuming recording');
   }
 
@@ -691,7 +808,12 @@ export function resumeRecording(interval: number, tray: Tray) {
       const fileName = path.join(tempDir, `${screenshotCount + 1}.jpg`);
       const imgPath = await takeScreenshot(fileName);
       screenshotCount++; // Increment counter after successful screenshot
-      log.debug('Screenshot saved to:', imgPath, 'Total screenshots:', screenshotCount);
+      log.debug(
+        'Screenshot saved to:',
+        imgPath,
+        'Total screenshots:',
+        screenshotCount,
+      );
     } catch (error) {
       log.error('Error taking screenshot:', error);
       throw error;
@@ -709,15 +831,14 @@ export function resumeRecording(interval: number, tray: Tray) {
 
 log.info('Log location:', log.transports.file.getFile().path);
 
-
-
 //--------------Export Functionality--------------------------------
 
-
-
 // Export recording functions
-export async function exportRecordingToPath(filePath: string, fps: number, backupDir: string) {
-
+export async function exportRecordingToPath(
+  filePath: string,
+  fps: number,
+  backupDir: string,
+) {
   const exportBackupDir = backupDir;
 
   try {
@@ -732,7 +853,9 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
     log.info('Created export backup directory:', exportBackupDir);
 
     // Check if we have any screenshots to export
-    const files = fs.readdirSync(tempDir).filter(file => file.endsWith('.jpg'));
+    const files = fs
+      .readdirSync(tempDir)
+      .filter((file) => file.endsWith('.jpg'));
     if (files.length === 0) {
       const error = new Error('No screenshots found to export');
       log.warn(error.message);
@@ -767,7 +890,9 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
 
     // Verify files were copied successfully
     const backupFiles = await fs.promises.readdir(exportBackupDir);
-    log.info(`Successfully copied ${backupFiles.length} files to backup directory`);
+    log.info(
+      `Successfully copied ${backupFiles.length} files to backup directory`,
+    );
 
     // if applicable, read in the app usage data from the backup directory
     const appUsageFile = path.join(exportBackupDir, 'appUsage.json');
@@ -775,8 +900,7 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
     if (fs.existsSync(appUsageFile)) {
       const appUsageContent = await fs.promises.readFile(appUsageFile, 'utf-8');
       currentAppUsageData = JSON.parse(appUsageContent);
-    }
-    else{
+    } else {
       log.error('No app usage file found in backup directory');
       currentAppUsageData = appUsageData;
     }
@@ -788,19 +912,22 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
       interval: intervalInSeconds,
       duration: screenshotCount * intervalInSeconds,
       numShots: screenshotCount,
-      videoPath: '',  // Will be set after saving
+      videoPath: '', // Will be set after saving
       timelinePath: '',
       productivity: 0,
       thumbnailPath: '',
       tags: [],
       appUsage: currentAppUsageData,
+      description: '', // Initialize with empty string
     };
 
     try {
-      // Analyze productivity before creating video
-      const productivityScore = await analyzeProductivity(dayEntry);
-      dayEntry.productivity = productivityScore;
-      log.info('Productivity score calculated:', productivityScore);
+      // Generate description and analyze productivity
+      const analysisResult = await analyzeProductivity(dayEntry);
+      dayEntry.productivity = analysisResult.productivity;
+      dayEntry.description = analysisResult.description;
+      log.info('Generated timelapse description:', analysisResult.description);
+      log.info('Productivity score calculated:', analysisResult.productivity);
     } catch (error) {
       log.error('Error calculating productivity score:', error);
       // Continue with export even if productivity analysis fails
@@ -810,7 +937,9 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
     log.info('FFmpeg path set successfully');
 
     // Test ffmpeg synchronously first
-    const testResult = require('child_process').spawnSync(ffmpegPath, ['-version']);
+    const testResult = require('child_process').spawnSync(ffmpegPath, [
+      '-version',
+    ]);
     if (testResult.error) {
       throw new Error(`FFmpeg test failed: ${testResult.error}`);
     }
@@ -818,9 +947,13 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
 
     // Create a temporary file list for ffmpeg using backup directory
     const fileListPath = path.join(exportBackupDir, 'files.txt');
-    const fileList = backupFiles.filter(f => f.endsWith('.jpg'))
+    const fileList = backupFiles
+      .filter((f) => f.endsWith('.jpg'))
       .sort((a, b) => parseInt(a) - parseInt(b))
-      .map(file => `file '${path.join(exportBackupDir, file).replace(/'/g, "'\\''")}'`)
+      .map(
+        (file) =>
+          `file '${path.join(exportBackupDir, file).replace(/'/g, "'\\''")}'`,
+      )
       .join('\n');
     await fs.promises.writeFile(fileListPath, fileList);
 
@@ -846,11 +979,21 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
       .inputOptions(['-f', 'concat', '-safe', '0'])
       .videoCodec('libx264')
       .outputOptions([
-        '-pix_fmt', 'yuv420p',
-        '-preset', 'medium',
+        '-pix_fmt',
+        'yuv420p',
+        '-preset',
+        'ultrafast', // Use ultrafast preset for better compatibility
+        '-movflags',
+        '+faststart', // Optimize for web playback
+        '-profile:v',
+        'baseline', // Use baseline profile for maximum compatibility
+        '-level',
+        '3.0', // Set level for compatibility
         '-y',
-        '-framerate', fps.toString(),
-        '-vf', 'scale=1664:1080'
+        '-framerate',
+        fps.toString(),
+        '-vf',
+        'scale=1664:1080',
       ])
       .on('start', (cmd: string) => {
         log.info('FFmpeg command:', cmd);
@@ -901,7 +1044,6 @@ export async function exportRecordingToPath(filePath: string, fps: number, backu
       appTrackingInterval = setInterval(trackAppChange, 1000);
       log.info('Restarted app tracking after export');
     }
-
   } catch (error) {
     log.error('Failed to export timelapse:', error);
     throw error;
@@ -926,7 +1068,10 @@ export async function exportRecordingWithUserPath(tray: Tray, fps: number) {
   log.info('Exporting recording with files:', files);
 
   if (files.length === 0) {
-    await dialog.showErrorBox('No files found to export', 'You must record a replay before you can export it.');
+    await dialog.showErrorBox(
+      'No files found to export',
+      'You must record a replay before you can export it.',
+    );
     log.warn('No files found to export');
     return;
   }
@@ -947,7 +1092,10 @@ export async function exportRecordingWithUserPath(tray: Tray, fps: number) {
     log.info('Export cancelled by user');
     return;
   }
-  const exportDir = path.join(app.getPath('temp'), `DayReplay-export-${startDate}`);
+  const exportDir = path.join(
+    app.getPath('temp'),
+    `DayReplay-export-${startDate}`,
+  );
   await exportRecordingToPath(filePath, fps, exportDir);
 }
 
@@ -984,7 +1132,7 @@ async function resolveFfmpegPath(): Promise<string> {
 
   // Production paths
   const possiblePaths = [
-    path.join(process.resourcesPath, 'ffmpeg', binaryName),  // Try this first - simpler path
+    path.join(process.resourcesPath, 'ffmpeg', binaryName), // Try this first - simpler path
     path.join(process.resourcesPath, 'app.asar.unpacked', 'ffmpeg', binaryName),
     path.join(app.getAppPath(), '..', 'ffmpeg', binaryName),
     path.join(app.getPath('exe'), '..', 'ffmpeg', binaryName),
@@ -1011,7 +1159,9 @@ async function resolveFfmpegPath(): Promise<string> {
 
       // Test the binary
       try {
-        const testResult = require('child_process').spawnSync(ffmpegPath, ['-version']);
+        const testResult = require('child_process').spawnSync(ffmpegPath, [
+          '-version',
+        ]);
         if (!testResult.error) {
           log.info('FFmpeg test successful');
           cachedFfmpegPath = ffmpegPath;
@@ -1037,14 +1187,14 @@ async function initializeFfmpeg() {
     log.error('Failed to initialize FFmpeg:', error);
     dialog.showErrorBox(
       'Failed to initialize FFmpeg',
-      'Timelapse will not work without FFmpeg. Please try reinstalling the app or contact support if the issue persists.'
+      'Timelapse will not work without FFmpeg. Please try reinstalling the app or contact support if the issue persists.',
     );
     throw error;
   }
 }
 
 // Call the initialization function
-initializeFfmpeg().catch(error => {
+initializeFfmpeg().catch((error) => {
   log.error('Failed to initialize FFmpeg:', error);
 });
 
@@ -1059,12 +1209,15 @@ async function addToExportQueue() {
     log.info('Current export queue before adding:', currentQueue);
 
     // Create a backup directory for these screenshots
-    const backupDir = path.join(app.getPath('temp'), `DayReplay-backup-${startDate}`);
+    const backupDir = path.join(
+      app.getPath('temp'),
+      `DayReplay-backup-${startDate}`,
+    );
     await fs.promises.mkdir(backupDir, { recursive: true });
 
     // Get list of files before copying
     const files = await fs.promises.readdir(tempDir);
-    const screenshots = files.filter(file => file.endsWith('.jpg'));
+    const screenshots = files.filter((file) => file.endsWith('.jpg'));
 
     log.info(`Found ${screenshots.length} screenshots to backup`);
 
@@ -1077,7 +1230,9 @@ async function addToExportQueue() {
 
     // Verify files were copied successfully
     const backupFiles = await fs.promises.readdir(backupDir);
-    log.info(`Successfully backed up ${backupFiles.length} files to ${backupDir}`);
+    log.info(
+      `Successfully backed up ${backupFiles.length} files to ${backupDir}`,
+    );
 
     // Save app usage data
     const appUsageFile = path.join(backupDir, 'appUsage.json');
@@ -1089,7 +1244,7 @@ async function addToExportQueue() {
       backupDir,
       screenshotCount,
       interval: intervalInSeconds,
-      resolution
+      resolution,
     });
     (settingsStore as any).set('exportQueue', currentQueue);
     log.info('Added recording to export queue. New queue:', currentQueue);
@@ -1115,15 +1270,22 @@ export async function processExportQueue() {
 
     for (const item of currentQueue) {
       try {
-        log.info('[QUEUE PROCESS]: Processing export for startDate:', item.startDate);
+        log.info(
+          '[QUEUE PROCESS]: Processing export for startDate:',
+          item.startDate,
+        );
 
         // Check if backup exists
         if (item.backupDir && fs.existsSync(item.backupDir)) {
           // Verify backup files exist
           const backupFiles = await fs.promises.readdir(item.backupDir);
-          const screenshots = backupFiles.filter(file => file.endsWith('.jpg'));
+          const screenshots = backupFiles.filter((file) =>
+            file.endsWith('.jpg'),
+          );
 
-          log.info(`[QUEUE PROCESS]: Found ${screenshots.length} screenshots in backup`);
+          log.info(
+            `[QUEUE PROCESS]: Found ${screenshots.length} screenshots in backup`,
+          );
 
           if (screenshots.length === 0) {
             log.error('No screenshots found in backup directory');
@@ -1134,10 +1296,12 @@ export async function processExportQueue() {
           const appUsageFile = path.join(item.backupDir, 'appUsage.json');
           if (fs.existsSync(appUsageFile)) {
             log.info('Found app usage file:', appUsageFile);
-            const appUsageContent = await fs.promises.readFile(appUsageFile, 'utf-8');
+            const appUsageContent = await fs.promises.readFile(
+              appUsageFile,
+              'utf-8',
+            );
             appUsageData = JSON.parse(appUsageContent);
-          }
-          else{
+          } else {
             log.error('No app usage file found in backup directory');
             continue;
           }
@@ -1150,18 +1314,27 @@ export async function processExportQueue() {
 
           try {
             // Create the export path
-            const localDayDir = path.join(app.getPath('appData'), "DayReplays");
+            const localDayDir = path.join(app.getPath('appData'), 'DayReplays');
             if (!fs.existsSync(localDayDir)) {
               fs.mkdirSync(localDayDir, { recursive: true });
             }
-            const filePath = path.join(localDayDir, `DayReplay-${startDate}.mp4`);
+            const filePath = path.join(
+              localDayDir,
+              `DayReplay-${startDate}.mp4`,
+            );
 
             // Export directly from backup directory
             await exportRecordingToPath(filePath, 30, item.backupDir);
-            log.info('[QUEUE PROCESS]: Successfully processed queued export for startDate:', item.startDate);
+            log.info(
+              '[QUEUE PROCESS]: Successfully processed queued export for startDate:',
+              item.startDate,
+            );
 
             // Only clean up backup after successful export
-            await fs.promises.rm(item.backupDir, { recursive: true, force: true });
+            await fs.promises.rm(item.backupDir, {
+              recursive: true,
+              force: true,
+            });
 
             // Reset recording state
             isRecording = false;
@@ -1175,16 +1348,20 @@ export async function processExportQueue() {
             log.info('Cleared temp directory for fresh recording');
 
             // Clear this item from the queue
-            const remainingQueue = ((settingsStore as any).get('exportQueue') || []).filter(
-              (queueItem: any) => queueItem.startDate !== item.startDate
+            const remainingQueue = (
+              (settingsStore as any).get('exportQueue') || []
+            ).filter(
+              (queueItem: any) => queueItem.startDate !== item.startDate,
             );
             (settingsStore as any).set('exportQueue', remainingQueue);
 
             // Update menu to reflect new state
             updateMenu();
-
           } catch (exportError) {
-            log.error('[QUEUE PROCESS]: Failed to process export:', exportError);
+            log.error(
+              '[QUEUE PROCESS]: Failed to process export:',
+              exportError,
+            );
             // Don't remove from queue if export failed
             throw exportError;
           }
@@ -1216,7 +1393,9 @@ export async function processExportQueue() {
       // Update menu to reflect final state
       updateMenu();
 
-      log.info('Recording state reset and temp directory cleared for fresh recordings');
+      log.info(
+        'Recording state reset and temp directory cleared for fresh recordings',
+      );
     } catch (cleanupError) {
       log.error('Error during final cleanup:', cleanupError);
     }
@@ -1240,10 +1419,17 @@ async function clearExportQueue() {
     for (const item of currentQueue) {
       if (item.backupDir && fs.existsSync(item.backupDir)) {
         try {
-          await fs.promises.rm(item.backupDir, { recursive: true, force: true });
+          await fs.promises.rm(item.backupDir, {
+            recursive: true,
+            force: true,
+          });
           log.info('Cleaned up backup directory:', item.backupDir);
         } catch (error) {
-          log.error('Failed to clean up backup directory:', item.backupDir, error);
+          log.error(
+            'Failed to clean up backup directory:',
+            item.backupDir,
+            error,
+          );
         }
       }
     }
@@ -1258,5 +1444,3 @@ async function clearExportQueue() {
 
 // Export it so we can use it in main.ts
 export { clearExportQueue };
-
-
